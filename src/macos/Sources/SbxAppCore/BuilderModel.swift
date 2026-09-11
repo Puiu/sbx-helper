@@ -34,7 +34,7 @@ public final class BuilderModel {
     // Explicit override, or nil for the resolved default. Ports
     // app.js:41-42's `state.primary`.
     public private(set) var primary: String?
-    // `selection.keys.sorted()`, kept up to date at `selection`'s two
+    // `selection.keys` in JS-ordinal order, kept up to date at `selection`'s two
     // mutation sites (setSelection, scan's root-change reset) rather than
     // recomputed on every `coveringPath(for:)` call — that call happens
     // once per visible tree row on every render, so re-sorting there scales
@@ -155,18 +155,17 @@ public final class BuilderModel {
         await persistTemplate(effectiveTemplate)
     }
 
-    /// Paths currently marked editable, sorted. app.js's `editablePaths()`
-    /// returns `Map` insertion order instead, but every consumer here
-    /// (`buildArgs`, the manifest) sorts independently, so the resulting
-    /// command and manifest are unaffected.
+    /// Paths currently marked editable, in JS-ordinal order (matching
+    /// `buildArgs`/`resolvePrimary` — `JSOrder.precedes`, not Swift's
+    /// canonical-equivalence `<`).
     public var editablePaths: [String] {
-        selection.compactMap { $0.value == .editable ? $0.key : nil }.sorted()
+        selection.compactMap { $0.value == .editable ? $0.key : nil }.sorted(by: JSOrder.precedes)
     }
 
-    /// Paths currently marked read-only, sorted. See `editablePaths`'s note
-    /// on ordering.
+    /// Paths currently marked read-only, in JS-ordinal order. See
+    /// `editablePaths`'s note on ordering.
     public var readOnlyPaths: [String] {
-        selection.compactMap { $0.value == .readOnly ? $0.key : nil }.sorted()
+        selection.compactMap { $0.value == .readOnly ? $0.key : nil }.sorted(by: JSOrder.precedes)
     }
 
     public var resolvedPrimary: String? {
@@ -261,7 +260,7 @@ public final class BuilderModel {
     /// selection untouched.
     public func setSelection(_ path: String, _ kind: SelectionKind?) {
         if let kind {
-            let others = selection.keys.filter { $0 != path }.sorted()
+            let others = selection.keys.filter { $0 != path }.sorted(by: JSOrder.precedes)
             if findCoveringPath(path, in: others) != nil {
                 toasts.show("Can't select that — it overlaps an existing selection.", isError: true)
                 return
@@ -271,7 +270,7 @@ public final class BuilderModel {
             selection.removeValue(forKey: path)
             if primary == path { primary = nil }
         }
-        sortedSelectionKeys = selection.keys.sorted()
+        sortedSelectionKeys = selection.keys.sorted(by: JSOrder.precedes)
     }
 
     /// Ports the `e`/`r` keyboard shortcuts (app.js:1270-1283), which toggle
@@ -411,7 +410,7 @@ public final class BuilderModel {
         for path in editable { next[path] = .editable }
         for path in readOnly { next[path] = .readOnly }
         selection = next
-        sortedSelectionKeys = next.keys.sorted()
+        sortedSelectionKeys = next.keys.sorted(by: JSOrder.precedes)
         for path in next.keys {
             for ancestor in tree.index.ancestors(of: path) {
                 expanded.insert(ancestor)

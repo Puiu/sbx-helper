@@ -77,6 +77,21 @@ struct ManifestEntryTests {
     }
 
     @Test
+    func manifestOrderingMatchesJSOrdinalForCanonicallyEquivalentPaths() {
+        let nfc = "/root/caf\u{E9}"
+        let nfd = "/root/cafe\u{301}"
+        // Swift's `<` treats these as canonically equivalent (neither
+        // precedes the other), but UTF-16-ordinal comparison puts the NFD
+        // form first (0x65 < 0xE9 at the first differing unit) — the
+        // manifest must follow the latter, matching `buildArgs`.
+        #expect(!(nfc < nfd) && !(nfd < nfc))
+        let jsOrdered = [nfc, nfd].sorted(by: JSOrder.precedes)
+        #expect(jsOrdered == [nfd, nfc])
+        let entries = manifestEntries(editable: [nfc, nfd], readOnly: [], primary: nil)
+        #expect(entries.map(\.path) == jsOrdered)
+    }
+
+    @Test
     func builderModelExposesTheManifestForItsCurrentSelection() async {
         let scanner = StubScanner()
         let root = TreeNode(path: "/root", name: "/root", depth: 0, isGitRepo: false, unreadable: false)

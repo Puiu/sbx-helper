@@ -10,8 +10,8 @@ import Foundation
 /// equivalence (an NFD sequence can compare equal to its NFC form), which JS
 /// never does — use this wherever byte-for-byte parity with a JS `.sort()`
 /// or `!==` comparison matters.
-enum JSOrder {
-    static func precedes(_ a: String, _ b: String) -> Bool {
+public enum JSOrder {
+    public static func precedes(_ a: String, _ b: String) -> Bool {
         a.utf16.lexicographicallyPrecedes(b.utf16)
     }
 }

@@ -41,10 +41,10 @@ public struct ManifestEntry: Sendable, Equatable, Identifiable {
 /// and never special-cases the primary's position.
 public func manifestEntries(editable: [String], readOnly: [String], primary: String?) -> [ManifestEntry] {
     let resolved = resolvePrimary(editable, explicit: primary)
-    let editableEntries = editable.sorted().map {
+    let editableEntries = editable.sorted(by: JSOrder.precedes).map {
         ManifestEntry(path: $0, kind: .editable, isPrimary: $0 == resolved)
     }
-    let readOnlyEntries = readOnly.sorted().map {
+    let readOnlyEntries = readOnly.sorted(by: JSOrder.precedes).map {
         ManifestEntry(path: $0, kind: .readOnly, isPrimary: false)
     }
     return editableEntries + readOnlyEntries

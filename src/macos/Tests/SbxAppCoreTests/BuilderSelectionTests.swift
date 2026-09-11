@@ -233,4 +233,26 @@ struct BuilderSelectionTests {
         #expect(model.editablePaths == ["/root/A"])
         #expect(model.filterText == "A")
     }
+
+    @Test
+    func editablePathsUseJSOrdinalOrderForCanonicallyEquivalentPaths() async {
+        let (model, _) = await scannedModel()
+        // NOTE: the NFC-vs-NFD pair ("caf\u{E9}" vs "cafe\u{301}") cannot
+        // reach `editablePaths` at all — Swift's `Dictionary` hashes those
+        // two as the same key, so the second `setSelection` overwrites the
+        // first and only one entry survives. This pair is the closest
+        // reachable divergence: "ä" vs NFD "é" are canonically distinct
+        // (both survive as selection keys) yet Swift's `<` and the
+        // UTF-16-ordinal `JSOrder` disagree on their order.
+        let aUmlaut = "/root/\u{E4}"
+        let eAcuteNFD = "/root/e\u{301}"
+        #expect(aUmlaut != eAcuteNFD)
+        #expect(aUmlaut < eAcuteNFD)
+        model.setSelection(aUmlaut, .editable)
+        model.setSelection(eAcuteNFD, .editable)
+        // NFD "é" first: 0x65 < 0xE4 at the first differing UTF-16 unit —
+        // the opposite of Swift's `<`, matching `buildArgs`.
+        #expect(model.editablePaths == [eAcuteNFD, aUmlaut])
+        #expect(model.editablePaths == [aUmlaut, eAcuteNFD].sorted(by: JSOrder.precedes))
+    }
 }
