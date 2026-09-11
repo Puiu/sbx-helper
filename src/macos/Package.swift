@@ -61,7 +61,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SbxServicesTests",
-            dependencies: ["SbxServices"],
+            dependencies: ["SbxServices", "SbxKit"],
             path: "Tests/SbxServicesTests",
             // Not a `resources:` entry deliberately — ShimHarness locates
             // this file itself via `#filePath` (see its doc comment / the
