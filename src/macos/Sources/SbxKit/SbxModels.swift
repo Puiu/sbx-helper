@@ -130,6 +130,26 @@ public struct PolicyRule: Sendable, Equatable, Identifiable {
     public var status: String
     public var sandboxScoped: Bool
     public var removable: Bool
+
+    public init(id: String, name: String, decision: String, resources: [String], scope: String, origin: String, status: String, sandboxScoped: Bool, removable: Bool) {
+        self.id = id
+        self.name = name
+        self.decision = decision
+        self.resources = resources
+        self.scope = scope
+        self.origin = origin
+        self.status = status
+        self.sandboxScoped = sandboxScoped
+        self.removable = removable
+    }
+
+    /// The scope badge text — ports app.js's `renderPolicies` scope label:
+    /// the sandbox's own rules read "this sandbox", anything else is a kit
+    /// rule ("kit") or a broader rule ("global").
+    public var scopeLabel: String {
+        if sandboxScoped { return "this sandbox" }
+        return origin == "scoped" ? "kit" : "global"
+    }
 }
 
 /// Parses `sbx policy ls <name> --json` stdout into network-only rules,
@@ -157,4 +177,15 @@ public func parseNetworkRules(stdout: String, sandboxName: String) throws -> [Po
         }
 
     return rules.filter(\.sandboxScoped) + rules.filter { !$0.sandboxScoped }
+}
+
+/// The policy section's summary line — ports app.js's `renderPolicies`
+/// summary. One deliberate one-word fix: the JS interpolates "1 rule
+/// apply"; that reads as a bug in the UI, so the singular here is
+/// "applies".
+public func policySummary(_ rules: [PolicyRule]) -> String {
+    let scopedCount = rules.filter(\.sandboxScoped).count
+    let denyCount = rules.filter { $0.decision == "deny" }.count
+    let noun = rules.count == 1 ? "1 rule applies" : "\(rules.count) rules apply"
+    return "\(noun) · \(scopedCount) scoped to this sandbox · \(denyCount) deny"
 }
