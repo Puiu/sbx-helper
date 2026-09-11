@@ -220,6 +220,7 @@ struct ConfigCodecTests {
         #expect(loaded.config == defaultConfig())
         let bakPath = path + ".bak"
         #expect(FileManager.default.fileExists(atPath: bakPath))
+        #expect(FileManager.default.fileExists(atPath: path) == false)
         let preserved = try! Data(contentsOf: URL(fileURLWithPath: bakPath))
         #expect(preserved == Data(badBytes.utf8))
     }
