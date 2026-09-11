@@ -1,0 +1,11 @@
+# SwiftPM build artifacts
+.build/
+.swiftpm/
+
+# Packaged app bundles and their debug symbols — produced by
+# Scripts/package_app.sh, not checked in.
+*.app/
+*.app.dSYM/
+*.dSYM/
+
+.DS_Store

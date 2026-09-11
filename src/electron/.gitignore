@@ -1,0 +1,7 @@
+# Per-machine config and saved presets — rootPath is local to this checkout.
+sbx-helper.json
+
+# Electron
+node_modules/
+out/
+

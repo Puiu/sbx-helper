@@ -1,0 +1,28 @@
+diff --git a/node_modules/@electron/packager/dist/unzip.js b/node_modules/@electron/packager/dist/unzip.js
+index 624b612..746d42b 100644
+--- a/node_modules/@electron/packager/dist/unzip.js
++++ b/node_modules/@electron/packager/dist/unzip.js
+@@ -1,12 +1,17 @@
+ "use strict";
+-var __importDefault = (this && this.__importDefault) || function (mod) {
+-    return (mod && mod.__esModule) ? mod : { "default": mod };
+-};
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.extractElectronZip = void 0;
+-const extract_zip_1 = __importDefault(require("extract-zip"));
++const child_process_1 = require("child_process");
++// extract-zip (via yauzl's stream pipeline) hangs partway through this
++// Electron zip on this Node version — reproducibly stalls mid-extraction
++// with no error, no completion. The system `unzip` extracts the identical
++// archive correctly, so shell out to it instead. See patches/ for how this
++// survives npm install.
+ async function extractElectronZip(zipPath, targetDir) {
+-    await (0, extract_zip_1.default)(zipPath, { dir: targetDir });
++    await new Promise((resolve, reject) => {
++        (0, child_process_1.execFile)('/usr/bin/unzip', ['-q', '-o', zipPath, '-d', targetDir], (err) => {
++            if (err) reject(err); else resolve();
++        });
++    });
+ }
+ exports.extractElectronZip = extractElectronZip;
+-//# sourceMappingURL=unzip.js.map

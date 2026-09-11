@@ -1,0 +1,771 @@
+/* sbx-helper — colour carries permission and nothing else.
+   Deep amber = the agent can write here. Steel blue = read-only.
+   Everything path-shaped is monospace, because paths are this app's content. */
+
+:root {
+  --paper: #FBFBFA;
+  --surface: #FFFFFF;
+  --ink: #1C2024;
+  --muted: #6B7280;
+  --hairline: #DFE1E4;
+  --hairline-strong: #C7CBD1;
+
+  --write: #9A5B00;
+  --write-bg: #FBF0DE;
+  --write-strong: #7A4700;
+
+  --read: #3B6E8F;
+  --read-bg: #E8F1F6;
+  --read-strong: #2C5570;
+
+  --danger: #B4432F;
+  --focus: #3B6E8F;
+
+  --radius: 4px;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17191C;
+    --surface: #1E2124;
+    --ink: #EDEEF0;
+    --muted: #9AA1A9;
+    --hairline: #2C3034;
+    --hairline-strong: #3A3F44;
+
+    --write: #E3A64C;
+    --write-bg: #332510;
+    --write-strong: #F0BC72;
+
+    --read: #7FB2D6;
+    --read-bg: #142330;
+    --read-strong: #9EC6E3;
+
+    --danger: #E28372;
+    --focus: #7FB2D6;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* The UA's [hidden]{display:none} is lowest-precedence (user-agent origin),
+   so any author rule that sets display on the same element — .layout's
+   `display: grid`, .topbar-slot's `display: contents` below — would win over
+   a bare [hidden] otherwise. Force it explicit so hidden always means hidden,
+   regardless of what else targets the element; toggle visibility via the
+   `hidden` attribute/property everywhere, never inline style.display. */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tree-row, .seg-btn, .btn, .btn-quiet {
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* -- topbar --------------------------------------------------------- */
+
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.root-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.root-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.root-path {
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-quiet {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.btn-quiet:hover {
+  border-color: var(--hairline-strong);
+  color: var(--ink);
+}
+
+/* Wraps each tab's topbar controls so they can be shown/hidden as a unit
+   without disturbing .topbar's flex layout — `display: contents` removes the
+   wrapper itself from the box model, so its children act as direct flex
+   items of .topbar. See the global [hidden] rule above for why that's safe
+   to combine with `hidden`. */
+.topbar-slot {
+  display: contents;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.tab-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.tab-btn:hover { color: var(--ink); }
+.tab-btn[aria-selected="true"] {
+  background: var(--paper);
+  border-color: var(--hairline-strong);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* -- layout ----------------------------------------------------------- */
+
+.layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  /* minmax(0, 1fr), not bare 1fr: a flex/grid item's default min-width is
+     `auto`, i.e. "at least as wide as my content" — so unwrappable content
+     (a nowrap path in .sandbox-meta, say) can blow this track wider than
+     the viewport, pushing the fixed 340px pane off-screen with it. Paired
+     with .tree-pane's min-width: 0 below, which is needed for the same
+     reason one level down (a bare `1fr` track can't be rescued by a grid
+     item that itself refuses to shrink). */
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  .manifest-pane {
+    border-left: none;
+    border-top: 1px solid var(--hairline);
+    max-height: 55vh;
+  }
+}
+
+.tree-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.manifest-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border-left: 1px solid var(--hairline);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+/* -- tree --------------------------------------------------------- */
+
+.tree-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+#filterInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.checkbox input { cursor: pointer; }
+
+.tree-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  white-space: nowrap;
+}
+.tree-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.tree-row.cursor { background: color-mix(in srgb, var(--focus) 12%, transparent); }
+
+.disclosure {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+}
+.disclosure:disabled { visibility: hidden; }
+
+.row-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge-git, .badge-unreadable {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--hairline-strong);
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.badge-unreadable { color: var(--danger); border-color: var(--danger); }
+
+.row-reason {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-row.covered .row-name { color: var(--muted); }
+
+.row-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.seg-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.seg-btn[data-val="edit"].active {
+  background: var(--write-bg);
+  border-color: var(--write);
+  color: var(--write-strong);
+}
+.seg-btn[data-val="ro"].active {
+  background: var(--read-bg);
+  border-color: var(--read);
+  color: var(--read-strong);
+}
+
+/* A one-shot action, not part of the off/edit/ro permission toggle — kept
+   visually separate with a bit of margin rather than grouped tight with it. */
+.reveal-btn {
+  margin-left: 6px;
+}
+.reveal-btn:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.tree-row.sel-editable { border-left-color: var(--write); background: color-mix(in srgb, var(--write-bg) 55%, transparent); }
+.tree-row.sel-readonly { border-left-color: var(--read); background: color-mix(in srgb, var(--read-bg) 55%, transparent); }
+
+/* -- manifest --------------------------------------------------------- */
+
+.manifest-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.manifest-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+}
+.manifest-row.kind-editable { background: var(--write-bg); border-color: color-mix(in srgb, var(--write) 35%, var(--hairline)); }
+.manifest-row.kind-readonly { background: var(--read-bg); border-color: color-mix(in srgb, var(--read) 35%, var(--hairline)); }
+
+.star-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  color: var(--write-strong);
+}
+.star-btn:disabled { visibility: hidden; }
+
+.manifest-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  word-break: break-all;
+  flex: 1 1 auto;
+}
+.kind-editable .manifest-path { color: var(--write-strong); }
+.kind-readonly .manifest-path { color: var(--read-strong); }
+
+.manifest-note {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.remove-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.remove-btn:hover { color: var(--danger); }
+
+.empty-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* -- settings --------------------------------------------------------- */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.field-hint { font-style: italic; }
+
+.template-row { display: flex; gap: 6px; }
+
+select, input[type="text"] {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+}
+
+/* -- command --------------------------------------------------------- */
+
+.command-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.command {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 10px;
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 2.6em;
+}
+
+.error-hint {
+  font-size: 11.5px;
+  color: var(--danger);
+  margin: 0 0 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1 1 auto;
+  font-size: 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--write);
+  border-color: var(--write);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) { background: var(--write-strong); border-color: var(--write-strong); }
+
+.btn-danger { color: var(--danger); border-color: var(--danger); flex: 0 0 auto; }
+
+/* -- toast --------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+.toast.toast-error { background: var(--danger); }
+
+/* -- dialogs --------------------------------------------------------- */
+
+dialog.dialog {
+  border: 1px solid var(--hairline-strong);
+  border-radius: 6px;
+  padding: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  width: min(480px, 90vw);
+}
+dialog.dialog::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+dialog.dialog input[type="text"] {
+  margin-bottom: 10px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.recent-roots {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.recent-root-btn {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.recent-root-btn:hover { background: var(--paper); color: var(--ink); }
+.recent-root-btn.highlighted { background: var(--read-bg); color: var(--read-strong); }
+
+.presets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.preset-info { flex: 1 1 auto; min-width: 0; }
+.preset-name { font-weight: 600; font-size: 12.5px; }
+.preset-meta {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -- sandboxes tab ----------------------------------------------------- */
+
+.sandbox-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.sandbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.sandbox-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.sandbox-row[aria-checked="true"] {
+  border-left-color: var(--focus);
+  background: color-mix(in srgb, var(--focus) 10%, transparent);
+}
+
+.sandbox-name {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-agent {
+  font-size: 10.5px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+/* Deliberately not amber/blue — those two colours mean editable/read-only
+   everywhere else in this app ("colour carries permission and nothing
+   else", see the top of this file). Status gets its own dot instead. */
+.status-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--muted);
+}
+.status-dot.status-running { background: var(--focus); border-color: var(--focus); }
+.status-dot.status-stopped { background: transparent; }
+.status-dot.status-other { background: var(--danger); border-color: var(--danger); }
+
+.sandbox-meta {
+  /* flex-shrink: 1 (not 0) — this item must be able to shrink below its
+     content's natural width, or max-width/ellipsis below never actually
+     engage: a flex-shrink:0 item ignores the row's available space and
+     keeps its full content width, which is what was pushing the row (and
+     with it the whole .layout grid) wider than the window. */
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+  font-size: 11.5px;
+}
+.sandbox-summary dt { color: var(--muted); }
+.sandbox-summary dd {
+  margin: 0;
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+.policy-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.policy-row {
+  padding: 6px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.policy-row.scope-global { opacity: 0.6; }
+
+.policy-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.policy-decision {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--write);
+  color: var(--write-strong);
+}
+.policy-decision.deny { border-color: var(--danger); color: var(--danger); }
+
+.policy-scope-label {
+  font-size: 10px;
+  color: var(--muted);
+  flex: 1 1 auto;
+}
+
+.policy-resources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.policy-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--paper);
+  border: 1px solid var(--hairline-strong);
+}
+.policy-chip .remove-btn { font-size: 12px; }
+
+.policy-add-row {
+  display: flex;
+  gap: 6px;
+}
+.policy-add-row select { flex: 0 0 auto; width: auto; }
+.policy-add-row input { flex: 1 1 auto; }
+.policy-add-row .btn { flex: 0 0 auto; }

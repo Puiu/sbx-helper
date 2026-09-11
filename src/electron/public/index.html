@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sbx-helper</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">sbx-helper</div>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button id="tabBuilderBtn" class="tab-btn" type="button" role="tab" aria-selected="true" aria-controls="builderPanel">Builder</button>
+    <button id="tabSandboxesBtn" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="sandboxesPanel">Sandboxes</button>
+  </nav>
+  <div id="builderTopbarControls" class="topbar-slot">
+    <div class="root-control">
+      <span class="root-label">root</span>
+      <span id="rootPath" class="root-path"></span>
+      <button id="changeRootBtn" class="btn-quiet" type="button">change</button>
+    </div>
+    <button id="presetsBtn" class="btn-quiet" type="button">presets</button>
+  </div>
+  <div id="sandboxesTopbarControls" class="topbar-slot" hidden>
+    <span id="sandboxCount" class="root-label"></span>
+    <button id="refreshSandboxesBtn" class="btn-quiet" type="button">refresh</button>
+  </div>
+</header>
+
+<main id="builderPanel" class="layout" role="tabpanel" aria-labelledby="tabBuilderBtn">
+  <section class="tree-pane">
+    <div class="tree-controls">
+      <input id="filterInput" type="text" placeholder="Filter folders…  (press /)" autocomplete="off" spellcheck="false">
+      <label class="checkbox">
+        <input id="gitOnlyToggle" type="checkbox">
+        git repos only
+      </label>
+    </div>
+    <div id="treeList" class="tree-list" role="listbox" aria-label="Folders"></div>
+  </section>
+
+  <aside class="manifest-pane">
+    <section class="manifest-section">
+      <h2>Workspaces</h2>
+      <ul id="manifestList" class="manifest-list"></ul>
+      <p id="manifestEmpty" class="empty-hint">
+        Nothing selected. Click a folder, or press <kbd>e</kbd> (editable) / <kbd>r</kbd> (read-only) on the highlighted row.
+      </p>
+    </section>
+
+    <section class="manifest-section settings">
+      <label class="field">
+        <span>Template</span>
+        <div class="template-row">
+          <select id="templateSelect"></select>
+          <input id="templateCustom" type="text" placeholder="custom template name" hidden>
+        </div>
+      </label>
+      <label class="field">
+        <span>Sandbox name</span>
+        <input id="nameInput" type="text" placeholder="auto">
+      </label>
+      <label class="checkbox">
+        <input id="cloneToggle" type="checkbox">
+        --clone <span class="field-hint">(work on an in-container clone, not a live mount)</span>
+      </label>
+    </section>
+
+    <section class="manifest-section command-section">
+      <h2>Command</h2>
+      <pre id="commandDisplay" class="command"></pre>
+      <p id="commandError" class="error-hint" hidden></p>
+      <div class="actions">
+        <button id="copyBtn" class="btn" type="button" disabled>Copy</button>
+        <button id="runBtn" class="btn btn-primary" type="button" disabled>Run in iTerm</button>
+        <button id="saveBtn" class="btn" type="button" disabled>Save preset</button>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<main id="sandboxesPanel" class="layout" role="tabpanel" aria-labelledby="tabSandboxesBtn" hidden>
+  <section class="tree-pane">
+    <div id="sandboxList" class="sandbox-list" role="radiogroup" aria-label="Sandboxes"></div>
+    <p id="sandboxListEmpty" class="empty-hint" hidden>No sandboxes found.</p>
+    <p id="sandboxListError" class="error-hint" hidden></p>
+  </section>
+
+  <aside class="manifest-pane">
+    <section class="manifest-section" id="sandboxDetailEmpty">
+      <p class="empty-hint">Select a sandbox to see details and actions.</p>
+    </section>
+
+    <section class="manifest-section" id="sandboxDetailSection" hidden>
+      <h2>Selected sandbox</h2>
+      <dl id="sandboxSummary" class="sandbox-summary"></dl>
+    </section>
+
+    <section class="manifest-section command-section" id="sandboxRunSection" hidden>
+      <label class="field">
+        <span>Agent arguments</span>
+        <input id="sandboxArgsInput" type="text" placeholder="e.g. --model opusplan" autocomplete="off" spellcheck="false">
+      </label>
+      <pre id="sandboxCommandDisplay" class="command"></pre>
+      <p id="sandboxCommandError" class="error-hint" hidden></p>
+      <div class="actions">
+        <button id="sandboxRunBtn" class="btn btn-primary" type="button">Run</button>
+        <button id="sandboxStopBtn" class="btn" type="button">Stop</button>
+        <button id="sandboxDeleteBtn" class="btn btn-danger" type="button">Delete</button>
+      </div>
+    </section>
+
+    <section class="manifest-section" id="policySection" hidden>
+      <h2>Network policies</h2>
+      <p id="policySummary" class="field-hint"></p>
+      <ul id="policyList" class="policy-list"></ul>
+      <div class="policy-add-row">
+        <select id="policyDecisionSelect">
+          <option value="allow">allow</option>
+          <option value="deny">deny</option>
+        </select>
+        <input id="policyResourceInput" type="text" placeholder="example.com, *.example.com" autocomplete="off" spellcheck="false">
+        <button id="policyAddBtn" class="btn" type="button">Add</button>
+      </div>
+      <p id="policyError" class="error-hint" hidden></p>
+    </section>
+  </aside>
+</main>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<dialog id="presetsDialog" class="dialog">
+  <h2>Saved presets</h2>
+  <ul id="presetsListDialog" class="presets-list"></ul>
+  <div class="dialog-actions">
+    <button id="closePresetsBtn" class="btn" type="button">Close</button>
+  </div>
+</dialog>
+
+<dialog id="rootDialog" class="dialog">
+  <h2>Change root folder</h2>
+  <input id="rootInput" type="text" placeholder="/absolute/path" spellcheck="false">
+  <ul id="recentRootsList" class="recent-roots"></ul>
+  <p id="rootError" class="error-hint" hidden></p>
+  <div class="dialog-actions">
+    <button id="cancelRootBtn" class="btn" type="button">Cancel</button>
+    <button id="confirmRootBtn" class="btn btn-primary" type="button">Go</button>
+  </div>
+</dialog>
+
+<dialog id="saveDialog" class="dialog">
+  <h2>Save preset</h2>
+  <input id="presetNameInput" type="text" placeholder="preset name" spellcheck="false">
+  <p id="saveError" class="error-hint" hidden></p>
+  <div class="dialog-actions">
+    <button id="cancelSaveBtn" class="btn" type="button">Cancel</button>
+    <button id="confirmSaveBtn" class="btn btn-primary" type="button">Save</button>
+  </div>
+</dialog>
+
+<dialog id="deleteSandboxDialog" class="dialog">
+  <h2>Delete sandbox</h2>
+  <p id="deleteSandboxMessage"></p>
+  <p class="field-hint">
+    This stops the sandbox, removes its container, cleans up any git worktrees, and deletes its
+    state — including a sandbox that's currently in use (e.g. an open SSH connection). This
+    cannot be undone.
+  </p>
+  <p id="deleteSandboxError" class="error-hint" hidden></p>
+  <div class="dialog-actions">
+    <button id="cancelDeleteSandboxBtn" class="btn" type="button">Cancel</button>
+    <button id="confirmDeleteSandboxBtn" class="btn btn-danger" type="button">Delete</button>
+  </div>
+</dialog>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

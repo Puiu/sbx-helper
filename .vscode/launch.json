@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:sbx-helper}/src/macos",
+            "name": "Debug SbxHelperApp (src/macos)",
+            "target": "SbxHelperApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug SbxHelperApp (src/macos)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:sbx-helper}/src/macos",
+            "name": "Release SbxHelperApp (src/macos)",
+            "target": "SbxHelperApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release SbxHelperApp (src/macos)"
+        }
+    ]
+}
