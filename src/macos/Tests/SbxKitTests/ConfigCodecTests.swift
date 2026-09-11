@@ -208,6 +208,49 @@ struct ConfigCodecTests {
         #expect(loaded.config.sandboxArgs == [:])
         #expect(loaded.isDegraded == false)
     }
+
+    @Test("malformed JSON is preserved as .bak with the exact original bytes")
+    func preservesMalformedJSONAsBak() {
+        let dir = TempDirectory()
+        let path = dir.joined("sbx-helper.json")
+        let badBytes = "{ not json"
+        try! badBytes.write(toFile: path, atomically: true, encoding: .utf8)
+        let loaded = loadConfig(path)
+        #expect(loaded.error != nil)
+        #expect(loaded.config == defaultConfig())
+        let bakPath = path + ".bak"
+        #expect(FileManager.default.fileExists(atPath: bakPath))
+        let preserved = try! Data(contentsOf: URL(fileURLWithPath: bakPath))
+        #expect(preserved == Data(badBytes.utf8))
+    }
+
+    @Test("a second malformed load overwrites a stale .bak with the latest bad bytes")
+    func overwritesStaleBak() {
+        let dir = TempDirectory()
+        let path = dir.joined("sbx-helper.json")
+        let bakPath = path + ".bak"
+        try! "{ first bad".write(toFile: path, atomically: true, encoding: .utf8)
+        _ = loadConfig(path)
+        let secondBadBytes = "{ second bad!!"
+        try! secondBadBytes.write(toFile: path, atomically: true, encoding: .utf8)
+        _ = loadConfig(path)
+        let preserved = try! Data(contentsOf: URL(fileURLWithPath: bakPath))
+        #expect(preserved == Data(secondBadBytes.utf8))
+    }
+
+    @Test("valid and missing files create no .bak")
+    func noBakForValidOrMissing() {
+        let dir = TempDirectory()
+        let validPath = dir.joined("valid.json")
+        var cfg = defaultConfig()
+        cfg.rootPath = "/tmp/x"
+        saveConfig(validPath, cfg)
+        _ = loadConfig(validPath)
+        #expect(!FileManager.default.fileExists(atPath: validPath + ".bak"))
+        let missingPath = dir.joined("missing.json")
+        _ = loadConfig(missingPath)
+        #expect(!FileManager.default.fileExists(atPath: missingPath + ".bak"))
+    }
 }
 
 @Suite("resolveConfigPath")

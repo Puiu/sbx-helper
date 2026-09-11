@@ -83,6 +83,8 @@ public func loadConfig(_ path: String) -> LoadedConfig {
             hadUnrecoverableFieldShape: hasUnrecoverableFieldShape(in: data)
         )
     } catch {
+        try? fm.removeItem(atPath: path + ".bak")
+        try? fm.moveItem(atPath: path, toPath: path + ".bak")
         return LoadedConfig(config: defaultConfig(), error: "\(error)", droppedPresets: 0)
     }
 }
