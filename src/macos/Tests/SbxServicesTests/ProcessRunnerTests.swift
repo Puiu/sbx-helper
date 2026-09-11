@@ -170,4 +170,27 @@ struct ProcessRunnerTests {
         let result = await task.value
         #expect(result.ok == false)
     }
+
+    @Test("a cancelled run settles even when the child ignores SIGTERM")
+    func cancellationSettlesWhenChildIgnoresSigterm() async throws {
+        let harness = try ShimHarness()
+        let runner = ProcessRunner()
+        var env = harness.environment
+        env["SBX_SHIM_IGNORE_TERM"] = "1"
+        env["SBX_SHIM_SLEEP_SECONDS"] = "30"
+        let start = ContinuousClock.now
+        let task = Task {
+            await runner.run(
+                executable: harness.shimPath, arguments: ["stop", "cancel-ignores-term"],
+                stdin: nil, environment: env, timeout: .seconds(60), maxOutputBytes: 1_000_000
+            )
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        task.cancel()
+        let result = await task.value
+        let elapsed = ContinuousClock.now - start
+        #expect(result.ok == false)
+        #expect(result.timedOut == false)
+        #expect(elapsed < .seconds(10))
+    }
 }

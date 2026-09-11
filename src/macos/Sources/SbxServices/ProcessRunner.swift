@@ -126,9 +126,41 @@ private final class Coordination: @unchecked Sendable {
         return true
     }
 
+    func trySettleForCancellation() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard !isSettled else { return false }
+        isSettled = true
+        return true
+    }
+
     var currentExitStatus: Int32 {
         lock.lock(); defer { lock.unlock() }
         return exitStatus
+    }
+}
+
+/// Lets the `onCancel` handler resume the `CheckedContinuation` after the
+/// SIGTERM->SIGKILL grace period when the child ignores SIGTERM — mirroring
+/// `TimeoutTaskBox` (NSLock-guarded, `@unchecked Sendable`) because the
+/// continuation is stored from the `withCheckedContinuation` closure and
+/// resumed from a detached task off-actor. The resume goes through
+/// `Coordination.trySettleForCancellation`, so the normal termination/EOF
+/// paths still win the race when the child dies promptly (exactly-once
+/// resume preserved by `isSettled`).
+private final class ContinuationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<CommandResult, Never>?
+
+    func set(_ continuation: CheckedContinuation<CommandResult, Never>) {
+        lock.lock(); self.continuation = continuation; lock.unlock()
+    }
+
+    func resumeIfCancelled(
+        coordination: Coordination, result: CommandResult
+    ) {
+        guard coordination.trySettleForCancellation() else { return }
+        lock.lock(); let cont = continuation; continuation = nil; lock.unlock()
+        cont?.resume(returning: result)
     }
 }
 
@@ -205,9 +237,11 @@ public actor ProcessRunner: CommandRunning {
         let pid = process.processIdentifier // captured first — see PLAN.md's ProcessRunner traps
         let coordination = Coordination()
         let timeoutTaskBox = TimeoutTaskBox()
+        let continuationBox = ContinuationBox()
 
         return await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<CommandResult, Never>) in
+                continuationBox.set(continuation)
                 @Sendable func buildResult(ok: Bool, exitCode: Int32?, timedOut: Bool) -> CommandResult {
                     CommandResult(
                         ok: ok, exitCode: exitCode,
@@ -313,7 +347,36 @@ public actor ProcessRunner: CommandRunning {
                 }
             }
         } onCancel: {
+            timeoutTaskBox.cancel()
             kill(pid, SIGTERM)
+            // The child may ignore SIGTERM — without this, `run()` would hang
+            // until `timeout` because no EOF/termination signal ever arrives
+            // to settle the continuation. Give SIGTERM a ~2s grace period so
+            // a promptly-dying child still resolves via its normal
+            // termination/EOF path (preserving its exit status), then
+            // escalate to SIGKILL and settle with a cancellation result.
+            // `trySettleForCancellation` keeps the resume exactly-once
+            // against those normal paths.
+            Task.detached {
+                try? await Task.sleep(for: .seconds(2))
+                // Liveness check first — see the timeout escalation above for
+                // why SIGKILL must never target a potentially-recycled pid.
+                if kill(pid, 0) == 0 {
+                    kill(pid, SIGKILL)
+                }
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
+                let stderrText = decodeCapturedOutput(stderrBuffer.snapshot)
+                continuationBox.resumeIfCancelled(
+                    coordination: coordination,
+                    result: CommandResult(
+                        ok: false, exitCode: nil,
+                        stdout: decodeCapturedOutput(stdoutBuffer.snapshot),
+                        stderr: stderrText.isEmpty ? "Cancelled." : stderrText,
+                        timedOut: false
+                    )
+                )
+            }
         }
     }
 }
