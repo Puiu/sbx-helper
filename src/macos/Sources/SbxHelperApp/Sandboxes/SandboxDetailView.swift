@@ -4,8 +4,8 @@ import SbxAppCore
 
 /// The selected sandbox's detail + run section — ports app.js:904-975's
 /// `renderSandboxDetail`/`refreshSandboxCommand` and index.html:91-112's
-/// `#sandboxDetailEmpty`/`#sandboxDetailSection`/`#sandboxRunSection`.
-/// The policy section (index.html:114-126) stays Phase 7's.
+/// `#sandboxDetailEmpty`/`#sandboxDetailSection`/`#sandboxRunSection`,
+/// plus the policy section (index.html:114-126, `PolicyListView`).
 struct SandboxDetailView: View {
     @Environment(SandboxesModel.self) private var environmentSandboxes
     let sandbox: Sandbox
@@ -57,6 +57,8 @@ struct SandboxDetailView: View {
                     Button("Delete") { sandboxes.requestDelete() }
                         .disabled(!sandboxes.canDelete)
                 }
+
+                PolicyListView()
             }
             .padding(12)
         }
