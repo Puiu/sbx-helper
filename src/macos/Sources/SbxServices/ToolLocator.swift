@@ -1,5 +1,7 @@
-// Resolves the absolute path to the `sbx` binary once per launch and caches
-// it. A GUI-launched .app gets launchd's minimal PATH
+// Resolves the absolute path to the `sbx` binary and caches successes.
+// Misses are NOT cached — they re-resolve on the next call so an
+// sbx installed later is picked up without a restart. A GUI-launched
+// .app gets launchd's minimal PATH
 // (/usr/bin:/bin:/usr/sbin:/sbin) — /opt/homebrew/bin is NOT on it — and
 // Foundation's Process does no PATH search of its own, so `executableURL`
 // must always be absolute. See PLAN.md's "ToolLocator" section for the
