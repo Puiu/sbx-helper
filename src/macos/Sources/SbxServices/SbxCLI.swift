@@ -66,6 +66,18 @@ public protocol SandboxControlling: Sendable {
 
 extension SbxCLI: SandboxListing, SandboxControlling {}
 
+/// The policy slice of `SbxCLI` the Sandboxes tab drives — extracted so
+/// `SandboxesModel` (Phase 7) can be tested without a real `sbx` on PATH,
+/// the same reason `SandboxListing`/`SandboxControlling` exist. `SbxCLI`
+/// conforms to all three.
+public protocol PolicyControlling: Sendable {
+    func listNetworkRules(name: String) async -> Result<[PolicyRule], SbxCLIFailure>
+    func addPolicy(name: String, decision: Decision, resources: [String]) async -> Result<[PolicyRule], SbxCLIFailure>
+    func removePolicy(name: String, ruleId: String?, resource: String?) async -> Result<Void, SbxCLIFailure>
+}
+
+extension SbxCLI: PolicyControlling {}
+
 public actor SbxCLI {
     private let commandRunner: CommandRunning
     private let toolLocator: ToolLocator

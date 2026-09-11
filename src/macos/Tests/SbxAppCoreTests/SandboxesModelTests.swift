@@ -44,6 +44,7 @@ struct SandboxesModelTests {
         SandboxesModel(
             lister: store,
             controller: store,
+            policies: store,
             launcher: launcher,
             toasts: toasts,
             mutateConfig: { [box] transform in box.mutate(transform) }

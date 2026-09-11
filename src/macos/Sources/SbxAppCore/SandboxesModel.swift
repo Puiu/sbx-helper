@@ -17,6 +17,7 @@ import SbxServices
 public final class SandboxesModel {
     private let lister: SandboxListing
     private let controller: SandboxControlling
+    private let policies: PolicyControlling
     private let launcher: TerminalLaunching
     private let toasts: ToastCenter
     private let mutateConfig: @Sendable (@escaping @Sendable (inout AppConfig) -> Void) async -> Void
@@ -26,6 +27,34 @@ public final class SandboxesModel {
     public private(set) var sandboxesError: String?
     public private(set) var selectedName: String?
     public private(set) var isBusy = false
+    /// The selected sandbox's network policy rules — ports app.js's
+    /// `state.policyRules`/`state.policiesFor`. Cleared on every real
+    /// selection change (like the JS clearing before re-rendering) and
+    /// (re)populated by `fetchPolicies()`.
+    public private(set) var policyRules: [PolicyRule] = []
+    /// Which sandbox name `policyRules` belongs to — ports
+    /// `state.policiesFor`, including its "Loading…" contract: the rules
+    /// belong to the selection only when this equals `selectedName`.
+    public private(set) var policiesFor: String?
+    public private(set) var isPolicyLoading = false
+    /// A policy add/remove is in flight — gates only the policy controls
+    /// (Add + remove buttons), never Run/Stop/Delete. The JS has no busy
+    /// flag on the policy path at all; this one exists to prevent
+    /// double-submits, which the JS is silently vulnerable to.
+    public private(set) var isPolicyBusy = false
+    /// The add-row's decision picker selection and free-text resource
+    /// input — model-owned (not view `@State`) so the validation below is
+    /// unit-testable, since SwiftUI-importing tests are forbidden.
+    public var policyDecision: Decision = .allow
+    public var policyInput: String = ""
+    /// Inline add-row error — ports app.js's `#policyError`. Server-side
+    /// add failures land here too (as in the JS); remove failures toast,
+    /// also as in the JS.
+    public private(set) var policyError: String?
+    /// Discards stale policy fetches when the selection moves before an
+    /// earlier fetch returns — the same generation pattern `BuilderModel`
+    /// uses for scans.
+    private var policyGeneration = 0
     /// Owned here (not the view) so a failed `confirmRemove` can leave the
     /// alert open — the native analogue of app.js's `deleteSandboxError`
     /// inline error, which likewise keeps the dialog up on failure.
@@ -43,12 +72,14 @@ public final class SandboxesModel {
     public init(
         lister: SandboxListing,
         controller: SandboxControlling,
+        policies: PolicyControlling,
         launcher: TerminalLaunching,
         toasts: ToastCenter,
         mutateConfig: @escaping @Sendable (@escaping @Sendable (inout AppConfig) -> Void) async -> Void = { _ in }
     ) {
         self.lister = lister
         self.controller = controller
+        self.policies = policies
         self.launcher = launcher
         self.toasts = toasts
         self.mutateConfig = mutateConfig
@@ -84,6 +115,7 @@ public final class SandboxesModel {
             if let selectedName, !list.contains(where: { $0.name == selectedName }) {
                 self.selectedName = nil
                 argsDrafts.removeValue(forKey: selectedName)
+                clearPolicyState()
             }
         case .failure(let failure):
             sandboxes = []
@@ -95,9 +127,117 @@ public final class SandboxesModel {
 
     /// Ports app.js:843-849's `selectSandbox` — a no-op reselect stays one
     /// (the policy fetch Phase 7 adds keys off this being a real change).
+    /// A real change also clears the policy display state immediately (the
+    /// JS clears `state.policyRules` before re-rendering) and orphans any
+    /// in-flight policy fetch via the generation bump.
     public func select(_ name: String) {
         if selectedName == name { return }
         selectedName = name
+        clearPolicyState()
+    }
+
+    /// Resets the policy display state and orphans any in-flight policy
+    /// fetch. Called on selection change, on selection loss, and at the
+    /// start of every fetch.
+    private func clearPolicyState() {
+        policyGeneration += 1
+        policyRules = []
+        policiesFor = nil
+        policyError = nil
+        isPolicyLoading = false
+    }
+
+    /// Ports app.js:977-995's `renderPolicies` header contract: "Loading…"
+    /// while the rules haven't caught up with the selection, the counts
+    /// line once they have, and nothing with no selection.
+    public var policySummaryText: String {
+        guard let selectedName else { return "" }
+        guard policiesFor == selectedName, !isPolicyLoading else { return "Loading…" }
+        return policySummary(policyRules)
+    }
+
+    /// Ports app.js:829-841's `fetchPolicies`: clears the rules first,
+    /// then stores what the (fresh, `requireKnownSandbox`-guarded)
+    /// `listNetworkRules` returns. Stale results — from a fetch orphaned
+    /// by a selection change mid-flight — are discarded via the
+    /// generation. A failure toasts (like the JS) but still marks
+    /// `policiesFor`, so the summary renders counts instead of sticking
+    /// on "Loading…" forever the way the JS does.
+    public func fetchPolicies() async {
+        guard let name = selectedName else { return }
+        policyGeneration += 1
+        let generation = policyGeneration
+        policyRules = []
+        policiesFor = nil
+        policyError = nil
+        isPolicyLoading = true
+        defer { if policyGeneration == generation { isPolicyLoading = false } }
+        switch await policies.listNetworkRules(name: name) {
+        case .success(let rules):
+            guard policyGeneration == generation, selectedName == name else { return }
+            policyRules = rules
+            policiesFor = name
+        case .failure(let failure):
+            guard policyGeneration == generation, selectedName == name else { return }
+            policiesFor = name
+            toasts.show(message(for: failure), isError: true)
+        }
+    }
+
+    /// Ports app.js:1125-1164's `doPolicyAdd`, including its client-side
+    /// validation and its contract that failures (client- or server-side)
+    /// surface inline in the add row, not as toasts. On success the
+    /// returned re-listed rules replace the pane, the input clears, and a
+    /// toast confirms — exactly like the JS.
+    public func addPolicy() async {
+        guard let name = selectedName else { return }
+        let resources = parseResourceList(policyInput)
+        if resources.isEmpty {
+            policyError = "Enter at least one resource."
+            return
+        }
+        if resources.count > maxResourcesPerRequest {
+            policyError = "Too many resources at once (max \(maxResourcesPerRequest)) — split them into multiple additions."
+            return
+        }
+        if let invalid = resources.first(where: { !isValidNetworkResource($0) }) {
+            policyError = "Not a valid resource: \(invalid)"
+            return
+        }
+        policyError = nil
+        isPolicyBusy = true
+        defer { isPolicyBusy = false }
+        switch await policies.addPolicy(name: name, decision: policyDecision, resources: resources) {
+        case .success(let rules):
+            // The rules belong to `name` — if the selection moved
+            // mid-flight, applying them here would corrupt the new
+            // selection's pane, so drop them (selecting back re-fetches).
+            guard selectedName == name else { return }
+            policyRules = rules
+            policiesFor = name
+            policyInput = ""
+            toasts.show("Rule added.")
+        case .failure(let failure):
+            policyError = message(for: failure)
+        }
+    }
+
+    /// Ports app.js:1166-1180's `doPolicyRemove`: the `SbxCLI` layer
+    /// already re-validates `removable` against a fresh list before
+    /// spawning, so the model just drives it and refreshes. Success
+    /// re-lists (the removal returns `Void`, unlike the add path) and
+    /// toasts; failure toasts — both exactly like the JS.
+    public func removePolicy(_ rule: PolicyRule) async {
+        guard let name = selectedName else { return }
+        isPolicyBusy = true
+        defer { isPolicyBusy = false }
+        switch await policies.removePolicy(name: name, ruleId: rule.id, resource: nil) {
+        case .success:
+            toasts.show("Rule removed.")
+            await fetchPolicies()
+        case .failure(let failure):
+            toasts.show(message(for: failure), isError: true)
+        }
     }
 
     /// Ports app.js:797-801's `defaultArgsTextFor`: the stored string when

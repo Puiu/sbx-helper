@@ -39,6 +39,7 @@ struct SbxHelperApp: App {
         _sandboxes = State(initialValue: SandboxesModel(
             lister: cli,
             controller: cli,
+            policies: cli,
             launcher: terminalLauncher,
             toasts: toasts,
             mutateConfig: { [appModel] transform in
