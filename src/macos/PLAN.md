@@ -242,12 +242,24 @@ to run `./Scripts/compile_and_run.sh` and work through it. What *was* verified n
 packaged `.app` launches and stays alive as a foreground app (polled across six seconds, no
 `~/Library/Logs/DiagnosticReports` entries), round-trips
 `~/Library/Application Support/sbx-helper-swift/sbx-helper.json` with all keys intact, and quits
-cleanly. A fresh-eyes `/feature-review` scoped to the Phase 5 files is the next step before this
-phase is considered closed, following the same review-and-fix pattern Phases 2–4 went through.
-Note: Phase 6 model work (`SandboxesModel`, `SandboxesModelTests`, list/row/detail views) has
-already started; the review should not try to close that too.
+cleanly.
 
-**Phase 6 (Sandboxes tab) is next.** Everything else from Phase 6 onward is still as originally
+**Phase 5 closed (2026-09-11).** The fresh-eyes review happened as a full-tree
+`/feature-review` rather than scoped to Phase 5 files, followed by a 5-fix wave
+(all reviewed and verified, 399/399 tests green): malformed config preserved as
+`.bak`; `ProcessRunner` cancellation now settles promptly even when the child
+ignores SIGTERM; single `loadConfig` at launch with a refreshable `ToolLocator`
+(success-only caching + `updateConfiguredPath`); JS-ordinal (`JSOrder`) ordering
+for selection and manifest; `SbxKit` declared for `SbxServicesTests`. Tentative
+findings were explicitly left out of scope.
+
+**Phase 6 (Sandboxes tab) closed (2026-09-11).** `SandboxesModel` (list,
+selection, per-sandbox args drafts + persistence, Run/Stop/Delete +
+delete-confirm alert), the list/row/detail/toolbar views, and `SbxCLI`'s
+mutating calls with `requireKnownSandbox` on every one — `SandboxesModelTests`
+(21) and `SbxCLITests` (19) green, full suite 399/399.
+
+**Phase 7 (Policies) is next.** Everything else from Phase 7 onward is still as originally
 planned.
 
 ## Context
