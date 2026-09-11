@@ -90,7 +90,7 @@ struct ToolLocatorTests {
         #expect(await locator.resolvedPath() == nil)
     }
 
-    @Test("resolution is cached — a second call doesn't re-invoke the shell probe")
+    @Test("a successful resolution is cached — a second call doesn't re-invoke the shell probe")
     func resolutionIsCached() async {
         actor CallCounter { var count = 0; func increment() { count += 1 } }
         let counter = CallCounter()
@@ -103,11 +103,43 @@ struct ToolLocatorTests {
         }
         let locator = ToolLocator(
             commandRunner: CountingRunner(counter: counter),
+            environment: [:], configuredPath: nil, fixedProbePaths: [], fileExists: { $0 == "/asdf/sbx" }
+        )
+        #expect(await locator.resolvedPath() == "/asdf/sbx")
+        #expect(await locator.resolvedPath() == "/asdf/sbx")
+        #expect(await counter.count == 1)
+    }
+
+    @Test("a nil resolution is NOT cached — installing sbx later is picked up without a restart")
+    func nilIsNotCached() async {
+        actor CallCounter { var count = 0; func increment() { count += 1 } }
+        let counter = CallCounter()
+        struct CountingRunner: CommandRunning {
+            let counter: CallCounter
+            func run(executable: String, arguments: [String], stdin: Data?, environment: [String: String], timeout: Duration, maxOutputBytes: Int) async -> CommandResult {
+                await counter.increment()
+                return CommandResult(ok: false, exitCode: 1, stdout: "", stderr: "not found")
+            }
+        }
+        let locator = ToolLocator(
+            commandRunner: CountingRunner(counter: counter),
             environment: [:], configuredPath: nil, fixedProbePaths: [], fileExists: { _ in false }
         )
-        _ = await locator.resolvedPath()
-        _ = await locator.resolvedPath()
-        #expect(await counter.count == 1)
+        #expect(await locator.resolvedPath() == nil)
+        #expect(await locator.resolvedPath() == nil)
+        #expect(await counter.count == 2)
+    }
+
+    @Test("updateConfiguredPath invalidates the cache so the next call resolves the new path")
+    func updateConfiguredPathInvalidates() async {
+        let locator = ToolLocator(
+            commandRunner: FakeCommandRunner(response: CommandResult(ok: false, exitCode: 1, stdout: "", stderr: "")),
+            environment: [:], configuredPath: "/configured/a/sbx",
+            fixedProbePaths: [], fileExists: { $0 == "/configured/a/sbx" || $0 == "/configured/b/sbx" }
+        )
+        #expect(await locator.resolvedPath() == "/configured/a/sbx")
+        await locator.updateConfiguredPath("/configured/b/sbx")
+        #expect(await locator.resolvedPath() == "/configured/b/sbx")
     }
 
     @Test("child environment prepends the resolved directory plus the homebrew/local prefixes to PATH")

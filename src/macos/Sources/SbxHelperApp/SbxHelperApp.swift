@@ -10,26 +10,25 @@ struct SbxHelperApp: App {
     @State private var builder: BuilderModel
     @State private var sandboxes: SandboxesModel
     @State private var toasts: ToastCenter
+    private let locator: ToolLocator
 
     init() {
         let configPath = resolveConfigPath(
             environment: ProcessInfo.processInfo.environment,
             home: NSHomeDirectory()
         )
-        let configStore = ConfigStore(path: configPath)
-
-        // `ToolLocator` wants `config.sbxPath`, but `config` itself isn't
-        // available until the async `app.load()` runs. Reading it here via
-        // the same synchronous `loadConfig` that `ConfigStore` uses
-        // internally avoids deferring the whole service graph into `.task`
-        // for the sake of one field.
-        let sbxPath = loadConfig(configPath).config.sbxPath
+        // Single synchronous load: `ConfigStore` takes the already-loaded
+        // value instead of re-reading the file, and `ToolLocator` takes
+        // `config.sbxPath` from that same load.
+        let loaded = loadConfig(configPath)
+        let configStore = ConfigStore(path: configPath, loaded: loaded)
         let runner = ProcessRunner()
         let locator = ToolLocator(
             commandRunner: runner,
             environment: ProcessInfo.processInfo.environment,
-            configuredPath: sbxPath
+            configuredPath: loaded.config.sbxPath
         )
+        self.locator = locator
         let cli = SbxCLI(commandRunner: runner, toolLocator: locator)
 
         let toasts = ToastCenter()
@@ -75,6 +74,10 @@ struct SbxHelperApp: App {
                 .environment(toasts)
                 .task {
                     await app.load()
+                    // Seam for the future Settings sheet: if `sbxPath` ever
+                    // becomes user-editable at runtime, this is where the
+                    // locator picks it up (same value today — no re-resolve).
+                    await locator.updateConfiguredPath(app.config.sbxPath)
                     appDelegate.onTerminate = { await app.flush() }
                     builder.adopt(config: app.config)
                     sandboxes.adopt(config: app.config)

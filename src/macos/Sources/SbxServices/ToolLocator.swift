@@ -16,7 +16,7 @@ public actor ToolLocator {
 
     private let commandRunner: CommandRunning
     private let environment: [String: String]
-    private let configuredPath: String?
+    private var configuredPath: String?
     private let fixedProbePaths: [String]
     private let fileExists: @Sendable (String) -> Bool
     private var cached: String??
@@ -35,14 +35,26 @@ public actor ToolLocator {
         self.fileExists = fileExists
     }
 
-    /// Resolves once, caches the result (including a `nil` "not found") for
-    /// the rest of this actor's lifetime.
+    /// Resolves once, caches successes for the rest of this actor's
+    /// lifetime. A `nil` "not found" is NOT cached, so installing `sbx`
+    /// later is picked up without a restart.
     public func resolvedPath() async -> String? {
         if let cached { return cached }
         let result = await resolve()
-        cached = result
+        if result != nil { cached = result }
         return result
     }
+
+    /// Updates the configured path (e.g. after the config loads or the user
+    /// edits it), invalidating the cache when it changed.
+    public func updateConfiguredPath(_ path: String?) {
+        if configuredPath != path {
+            configuredPath = path
+            cached = nil
+        }
+    }
+
+    public func invalidateCache() { cached = nil }
 
     private func resolve() async -> String? {
         if let envPath = environment["SBX_HELPER_SBX_PATH"], !envPath.isEmpty, fileExists(envPath) {

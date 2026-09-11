@@ -13,6 +13,15 @@ public actor ConfigStore {
     private let debounceInterval: Duration
     private var pendingSaveTask: Task<Void, Never>?
 
+    public init(path: String, loaded: LoadedConfig, debounceInterval: Duration = .milliseconds(300)) {
+        self.path = path
+        self.debounceInterval = debounceInterval
+        self.config = loaded.config
+        self.loadError = loaded.error
+        self.droppedPresets = loaded.droppedPresets
+        self.hadUnrecoverableFieldShape = loaded.hadUnrecoverableFieldShape
+    }
+
     public init(path: String, debounceInterval: Duration = .milliseconds(300)) {
         self.path = path
         self.debounceInterval = debounceInterval
