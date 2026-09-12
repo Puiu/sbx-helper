@@ -172,7 +172,11 @@ public func parseNetworkRules(stdout: String, sandboxName: String) throws -> [Po
                 id: r.id, name: r.name, decision: r.decision, resources: r.resources,
                 scope: r.scope, origin: r.origin, status: r.status,
                 sandboxScoped: sandboxScoped,
-                removable: sandboxScoped && r.editable == true
+                // Fail closed twice: sandbox-scoped AND explicitly editable
+                // AND carrying an id the removal lookup can actually match —
+                // an id-less rule would otherwise render a × button whose
+                // removal can never succeed.
+                removable: sandboxScoped && r.editable == true && !r.id.isEmpty
             )
         }
 

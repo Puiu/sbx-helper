@@ -155,6 +155,19 @@ struct ParseNetworkRulesTests {
         #expect(rules[0].removable == false)
     }
 
+    // Fail closed again: without an id the removal lookup can never match,
+    // so an id-less rule must not offer a × button that always fails.
+    @Test("a sandbox-scoped, editable rule with an empty id is not removable")
+    func emptyIdNotRemovable() throws {
+        let stdout = """
+        {"rules": [{"id":"","name":"orphan","policy_id":"local-policy",
+          "scope":"sandbox:my-sandbox","applies_to":"sandbox:my-sandbox","resource_type":"network",
+          "decision":"allow","resources":["a.com"],"origin":"local","layer":"local","status":"active","editable":true}]}
+        """
+        let rules = try parseNetworkRules(stdout: stdout, sandboxName: "my-sandbox")
+        #expect(rules[0].removable == false)
+    }
+
     @Test("sorts sandbox-scoped rules before global rules")
     func sortsScopedFirst() throws {
         let rules = try parseNetworkRules(stdout: Self.sampleStdout, sandboxName: "my-sandbox")

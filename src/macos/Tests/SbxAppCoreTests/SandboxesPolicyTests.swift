@@ -14,13 +14,14 @@ struct SandboxesPolicyTests {
     }
 
     private func policyRule(
-        id: String, scoped: Bool, decision: String = "allow", resources: [String] = ["example.com"]
+        id: String, scoped: Bool, decision: String = "allow", resources: [String] = ["example.com"],
+        removable: Bool? = nil
     ) -> PolicyRule {
         PolicyRule(
             id: id, name: id, decision: decision, resources: resources,
             scope: scoped ? "sandbox:web" : "global",
             origin: scoped ? "sandbox" : "global", status: "",
-            sandboxScoped: scoped, removable: scoped
+            sandboxScoped: scoped, removable: removable ?? scoped
         )
     }
 
@@ -107,7 +108,7 @@ struct SandboxesPolicyTests {
     }
 
     @Test
-    func fetchPoliciesFailureToastsButDoesNotStickOnLoading() async {
+    func fetchPoliciesFailureToastsAndReportsUnknownInsteadOfEmpty() async {
         let store = StubSandboxStore()
         store.listPolicyResult = .failure(.infrastructure("sbx policy ls failed."))
         let toasts = ToastCenter()
@@ -118,8 +119,11 @@ struct SandboxesPolicyTests {
 
         #expect(toasts.current?.message == "sbx policy ls failed.")
         #expect(toasts.current?.isError == true)
-        #expect(m.policiesFor == "web")
-        #expect(m.policySummaryText == "0 rules apply · 0 scoped to this sandbox · 0 deny")
+        // Unknown, not empty: policiesFor stays nil so the summary can't
+        // be mistaken for a genuinely rule-free sandbox.
+        #expect(m.policiesFor == nil)
+        #expect(m.policyRules.isEmpty)
+        #expect(m.policySummaryText == "Couldn't load policy rules.")
     }
 
     @Test
@@ -137,7 +141,24 @@ struct SandboxesPolicyTests {
     }
 
     @Test
-    func listRefreshThatClearsSelectionAlsoClearsPolicyState() async {
+    func listRefreshFailureAlsoClearsPolicyState() async {
+        let store = StubSandboxStore()
+        store.listPolicyResult = .success([policyRule(id: "r1", scoped: true)])
+        let (m, _) = await modelWithList([runningSandbox()], store: store)
+        m.select("web")
+        await m.fetchPolicies()
+        #expect(m.policiesFor == "web")
+
+        store.listResult = .failure(.infrastructure("sbx ls failed."))
+        await m.fetch()
+
+        #expect(m.selectedName == nil)
+        #expect(m.policyRules.isEmpty)
+        #expect(m.policiesFor == nil)
+    }
+
+    @Test
+    func confirmRemoveClearsPolicyState() async {
         let store = StubSandboxStore()
         store.listPolicyResult = .success([policyRule(id: "r1", scoped: true)])
         let (m, _) = await modelWithList([runningSandbox()], store: store)
@@ -146,8 +167,9 @@ struct SandboxesPolicyTests {
         #expect(m.policiesFor == "web")
 
         store.listResult = .success([])
-        await m.fetch()
+        await m.confirmRemove()
 
+        #expect(m.selectedName == nil)
         #expect(m.policyRules.isEmpty)
         #expect(m.policiesFor == nil)
     }
@@ -205,10 +227,12 @@ struct SandboxesPolicyTests {
         await m.addPolicy()
 
         #expect(store.addPolicyCalls.count == 1)
+        #expect(store.addPolicyCalls[0].name == "web")
         #expect(store.addPolicyCalls[0].decision == .deny)
         #expect(store.addPolicyCalls[0].resources == ["example.com"])
         #expect(m.policyInput == "")
         #expect(m.policyError == nil)
+        #expect(m.isPolicyBusy == false)
         #expect(m.policyRules.map(\.id) == ["r1", "r2"])
         #expect(m.policiesFor == "web")
         #expect(toasts.current?.message == "Rule added.")
@@ -230,9 +254,80 @@ struct SandboxesPolicyTests {
     }
 
     @Test
-    func removePolicySuccessRefreshesTheListAndToasts() async {
+    func secondAddWhileBusyIsDropped() async {
         let store = StubSandboxStore()
-        store.listPolicyResult = .success([])
+        store.addPolicyResult = .success([policyRule(id: "r2", scoped: true)])
+        store.gateAdd()
+        let (m, _) = await modelWithList([runningSandbox()], store: store)
+        m.select("web")
+        m.policyInput = "example.com"
+
+        let first = Task { await m.addPolicy() }
+        while store.callCount("addPolicy") == 0 {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(m.isPolicyBusy == true)
+        await m.addPolicy() // dropped by the busy guard, not queued
+        store.releaseAdd()
+        await first.value
+
+        #expect(store.addPolicyCalls.count == 1)
+        #expect(m.isPolicyBusy == false)
+        #expect(m.policyRules.map(\.id) == ["r2"])
+    }
+
+    @Test
+    func addFailureAfterSelectionMoveShowsNothingInTheNewPane() async {
+        let store = StubSandboxStore()
+        store.addPolicyResult = .failure(.commandFailed("denied by server"))
+        store.gateAdd()
+        let (m, _) = await modelWithList(
+            [runningSandbox(), runningSandbox(name: "api")], store: store
+        )
+        m.select("web")
+        m.policyInput = "example.com"
+
+        let gated = Task { await m.addPolicy() }
+        while store.callCount("addPolicy") == 0 {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        m.select("api")
+        store.releaseAdd()
+        await gated.value
+
+        #expect(m.policyError == nil)
+        #expect(m.policiesFor == nil)
+    }
+
+    @Test
+    func addResultSurvivesAnInflightFetch() async {
+        let added = [policyRule(id: "r2", scoped: true)]
+        let store = StubSandboxStore()
+        store.listPolicyResult = .success([policyRule(id: "r1", scoped: true)])
+        store.addPolicyResult = .success(added)
+        store.gateList()
+        let (m, _) = await modelWithList([runningSandbox()], store: store)
+        m.select("web")
+        let gatedFetch = Task { await m.fetchPolicies() }
+        while store.callCount("listPolicy") == 0 {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        m.policyInput = "example.com"
+
+        await m.addPolicy() // orphans the fetch via the generation bump
+        store.releaseList()
+        await gatedFetch.value
+
+        #expect(m.policyRules == added)
+        #expect(m.policiesFor == "web")
+        #expect(m.policyInput == "")
+    }
+
+    @Test
+    func removePolicySuccessRefreshesTheListAndToasts() async {
+        let refreshed = [policyRule(id: "r2", scoped: true)]
+        let store = StubSandboxStore()
+        store.listPolicyResult = .success(refreshed)
         let toasts = ToastCenter()
         let (m, _) = await modelWithList([runningSandbox()], store: store, toasts: toasts)
         m.select("web")
@@ -241,24 +336,55 @@ struct SandboxesPolicyTests {
         await m.removePolicy(policyRule(id: "r1", scoped: true))
 
         #expect(store.removePolicyCalls.count == 1)
+        #expect(store.removePolicyCalls[0].name == "web")
         #expect(store.removePolicyCalls[0].ruleId == "r1")
         #expect(store.removePolicyCalls[0].resource == nil)
         #expect(store.callCount("listPolicy") == 2)
+        #expect(m.policyRules == refreshed)
+        #expect(m.policiesFor == "web")
+        #expect(m.isPolicyBusy == false)
         #expect(toasts.current?.message == "Rule removed.")
         #expect(toasts.current?.isError == false)
     }
 
     @Test
+    func removePolicySkipsTheRefreshWhenTheSelectionMoved() async {
+        let store = StubSandboxStore()
+        store.gateRemove()
+        let toasts = ToastCenter()
+        let (m, _) = await modelWithList(
+            [runningSandbox(), runningSandbox(name: "api")], store: store, toasts: toasts
+        )
+        m.select("web")
+
+        let gated = Task { await m.removePolicy(policyRule(id: "r1", scoped: true)) }
+        while store.callCount("removePolicy") == 0 {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        m.select("api")
+        store.releaseRemove()
+        await gated.value
+
+        // The removal itself went through for "web" and says so — but the
+        // refresh must not fetch for the selection the user has moved to.
+        #expect(store.removePolicyCalls[0].name == "web")
+        #expect(toasts.current?.message == "Rule removed.")
+        #expect(store.callCount("listPolicy") == 0)
+    }
+
+    @Test
     func removePolicyFailureToastsAnError() async {
         let store = StubSandboxStore()
-        store.removePolicyResult = .failure(.ruleNotRemovable("g1"))
+        store.removePolicyResult = .failure(.ruleNotRemovable("kit-1"))
         let toasts = ToastCenter()
         let (m, _) = await modelWithList([runningSandbox()], store: store, toasts: toasts)
         m.select("web")
 
-        await m.removePolicy(policyRule(id: "g1", scoped: false))
+        // A scoped-but-locked (kit) rule — the realistic non-removable
+        // case, not a global one.
+        await m.removePolicy(policyRule(id: "kit-1", scoped: true, removable: false))
 
-        #expect(toasts.current?.message == "That rule cannot be removed from here: g1")
+        #expect(toasts.current?.message == "That rule cannot be removed from here: kit-1")
         #expect(toasts.current?.isError == true)
     }
 }

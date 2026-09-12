@@ -51,6 +51,11 @@ public final class SandboxesModel {
     /// add failures land here too (as in the JS); remove failures toast,
     /// also as in the JS.
     public private(set) var policyError: String?
+    /// The last policy fetch failed — distinct from "no rules". The
+    /// summary renders "Couldn't load policy rules." instead of counts so
+    /// a failed load can't be mistaken for a genuinely rule-free sandbox
+    /// once the failure toast fades.
+    public private(set) var policyLoadFailed = false
     /// Discards stale policy fetches when the selection moves before an
     /// earlier fetch returns — the same generation pattern `BuilderModel`
     /// uses for scans.
@@ -121,6 +126,7 @@ public final class SandboxesModel {
             sandboxes = []
             sandboxesError = message(for: failure)
             selectedName = nil
+            clearPolicyState()
         }
         sandboxesLoaded = true
     }
@@ -144,25 +150,27 @@ public final class SandboxesModel {
         policyRules = []
         policiesFor = nil
         policyError = nil
+        policyLoadFailed = false
         isPolicyLoading = false
     }
 
     /// Ports app.js:977-995's `renderPolicies` header contract: "Loading…"
     /// while the rules haven't caught up with the selection, the counts
-    /// line once they have, and nothing with no selection.
+    /// line once they have, nothing with no selection — and an honest
+    /// unknown state after a failed load rather than "0 rules".
     public var policySummaryText: String {
         guard let selectedName else { return "" }
-        guard policiesFor == selectedName, !isPolicyLoading else { return "Loading…" }
-        return policySummary(policyRules)
+        if policiesFor == selectedName, !isPolicyLoading { return policySummary(policyRules) }
+        return isPolicyLoading || !policyLoadFailed ? "Loading…" : "Couldn't load policy rules."
     }
 
     /// Ports app.js:829-841's `fetchPolicies`: clears the rules first,
     /// then stores what the (fresh, `requireKnownSandbox`-guarded)
     /// `listNetworkRules` returns. Stale results — from a fetch orphaned
     /// by a selection change mid-flight — are discarded via the
-    /// generation. A failure toasts (like the JS) but still marks
-    /// `policiesFor`, so the summary renders counts instead of sticking
-    /// on "Loading…" forever the way the JS does.
+    /// generation. A failure toasts (like the JS) and marks the load
+    /// failed, so the summary reports unknown instead of sticking on
+    /// "Loading…" the way the JS does.
     public func fetchPolicies() async {
         guard let name = selectedName else { return }
         policyGeneration += 1
@@ -170,6 +178,7 @@ public final class SandboxesModel {
         policyRules = []
         policiesFor = nil
         policyError = nil
+        policyLoadFailed = false
         isPolicyLoading = true
         defer { if policyGeneration == generation { isPolicyLoading = false } }
         switch await policies.listNetworkRules(name: name) {
@@ -179,7 +188,7 @@ public final class SandboxesModel {
             policiesFor = name
         case .failure(let failure):
             guard policyGeneration == generation, selectedName == name else { return }
-            policiesFor = name
+            policyLoadFailed = true
             toasts.show(message(for: failure), isError: true)
         }
     }
@@ -191,6 +200,9 @@ public final class SandboxesModel {
     /// toast confirms — exactly like the JS.
     public func addPolicy() async {
         guard let name = selectedName else { return }
+        // The Add button and the field's submit both stay live while busy —
+        // the model is what actually prevents the double-submit.
+        guard !isPolicyBusy else { return }
         let resources = parseResourceList(policyInput)
         if resources.isEmpty {
             policyError = "Enter at least one resource."
@@ -207,17 +219,26 @@ public final class SandboxesModel {
         policyError = nil
         isPolicyBusy = true
         defer { isPolicyBusy = false }
+        // Join the generation scheme: an add that completes while a fetch
+        // is still in flight orphans that fetch (its data predates the
+        // add), and a fetch started after the add orphans the add's own
+        // result in favor of fresher data — either order converges.
+        policyGeneration += 1
+        let generation = policyGeneration
         switch await policies.addPolicy(name: name, decision: policyDecision, resources: resources) {
         case .success(let rules):
             // The rules belong to `name` — if the selection moved
             // mid-flight, applying them here would corrupt the new
             // selection's pane, so drop them (selecting back re-fetches).
-            guard selectedName == name else { return }
+            guard selectedName == name, policyGeneration == generation else { return }
             policyRules = rules
             policiesFor = name
             policyInput = ""
             toasts.show("Rule added.")
         case .failure(let failure):
+            // Same staleness contract as success: A's failure must not
+            // surface inline in B's pane after a mid-flight move.
+            guard selectedName == name, policyGeneration == generation else { return }
             policyError = message(for: failure)
         }
     }
@@ -229,12 +250,16 @@ public final class SandboxesModel {
     /// toasts; failure toasts — both exactly like the JS.
     public func removePolicy(_ rule: PolicyRule) async {
         guard let name = selectedName else { return }
+        guard !isPolicyBusy else { return }
         isPolicyBusy = true
         defer { isPolicyBusy = false }
         switch await policies.removePolicy(name: name, ruleId: rule.id, resource: nil) {
         case .success:
             toasts.show("Rule removed.")
-            await fetchPolicies()
+            // Refresh the sandbox that was acted on — if the selection
+            // moved mid-remove, the new selection's own fetch owns its
+            // pane, so don't clobber it.
+            if selectedName == name { await fetchPolicies() }
         case .failure(let failure):
             toasts.show(message(for: failure), isError: true)
         }
@@ -381,6 +406,7 @@ public final class SandboxesModel {
             storedSandboxArgs.removeValue(forKey: sandbox.name)
             argsDrafts.removeValue(forKey: sandbox.name)
             selectedName = nil
+            clearPolicyState()
             showsDeleteConfirm = false
             toasts.show("Deleted \(sandbox.name).")
             await fetch()

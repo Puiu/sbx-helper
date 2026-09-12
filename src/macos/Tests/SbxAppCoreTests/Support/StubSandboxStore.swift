@@ -16,14 +16,16 @@ final class StubSandboxStore: SandboxListing, SandboxControlling, PolicyControll
     var removePolicyResult: Result<Void, SbxCLIFailure> = .success(())
     private(set) var calls: [String] = []
     private(set) var runExistingArgs: [(name: String, agentArgs: [String])] = []
-    private(set) var addPolicyCalls: [(decision: Decision, resources: [String])] = []
-    private(set) var removePolicyCalls: [(ruleId: String?, resource: String?)] = []
-    // Optional gate so a test can hold `listNetworkRules` in flight and
-    // observe mid-fetch model state before releasing it — the same shape as
-    // `StubLauncher`'s gate. Single waiter only, which is all the
-    // stale-discard test needs.
-    private var policyContinuation: CheckedContinuation<Void, Never>?
-    private var policyGated = false
+    private(set) var addPolicyCalls: [(name: String, decision: Decision, resources: [String])] = []
+    private(set) var removePolicyCalls: [(name: String, ruleId: String?, resource: String?)] = []
+    // Optional per-method gates so a test can hold one policy call in
+    // flight while driving the others — the same shape as
+    // `StubLauncher`'s gate. Single waiter per method, which is all the
+    // concurrency tests need. (One shared flag deadlocks the race tests:
+    // the driving call would block on the same gate its own release is
+    // sequenced after.)
+    private var gatedKeys: Set<String> = []
+    private var continuations: [String: CheckedContinuation<Void, Never>] = [:]
 
     func listSandboxes() async -> Result<[Sandbox], SbxCLIFailure> {
         lock.withLock {
@@ -58,49 +60,57 @@ final class StubSandboxStore: SandboxListing, SandboxControlling, PolicyControll
         lock.withLock { calls.filter { $0 == prefix || $0.hasPrefix(prefix + ":") }.count }
     }
 
-    /// Calls to `listNetworkRules` block until `releasePolicy()` is called.
-    func gatePolicy() {
-        lock.withLock { policyGated = true }
-    }
+    /// Calls to the gated method block until the matching release.
+    func gateList() { lock.withLock { _ = gatedKeys.insert("list") } }
+    func releaseList() { release("list") }
+    func gateAdd() { lock.withLock { _ = gatedKeys.insert("add") } }
+    func releaseAdd() { release("add") }
+    func gateRemove() { lock.withLock { _ = gatedKeys.insert("remove") } }
+    func releaseRemove() { release("remove") }
 
-    func releasePolicy() {
+    /// Back-compat for the stale-fetch test, which only ever gates the list.
+    func gatePolicy() { gateList() }
+    func releasePolicy() { releaseList() }
+
+    private func release(_ key: String) {
         let continuation: CheckedContinuation<Void, Never>? = lock.withLock {
-            // Opening the gate as well as resuming the waiter: later calls
-            // proceed without blocking.
-            policyGated = false
-            let c = self.policyContinuation
-            self.policyContinuation = nil
+            gatedKeys.remove(key)
+            let c = continuations.removeValue(forKey: key)
             return c
         }
         continuation?.resume()
     }
 
-    func listNetworkRules(name: String) async -> Result<[PolicyRule], SbxCLIFailure> {
-        let shouldWait: Bool = lock.withLock {
-            calls.append("listPolicy:\(name)")
-            return policyGated
-        }
+    private func waitIfGated(_ key: String) async {
+        let shouldWait: Bool = lock.withLock { gatedKeys.contains(key) }
         if shouldWait {
             await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-                lock.withLock { policyContinuation = c }
+                lock.withLock { continuations[key] = c }
             }
         }
+    }
+
+    func listNetworkRules(name: String) async -> Result<[PolicyRule], SbxCLIFailure> {
+        lock.withLock { calls.append("listPolicy:\(name)") }
+        await waitIfGated("list")
         return lock.withLock { listPolicyResult }
     }
 
     func addPolicy(name: String, decision: Decision, resources: [String]) async -> Result<[PolicyRule], SbxCLIFailure> {
         lock.withLock {
             calls.append("addPolicy:\(name)")
-            addPolicyCalls.append((decision, resources))
-            return addPolicyResult
+            addPolicyCalls.append((name, decision, resources))
         }
+        await waitIfGated("add")
+        return lock.withLock { addPolicyResult }
     }
 
     func removePolicy(name: String, ruleId: String?, resource: String?) async -> Result<Void, SbxCLIFailure> {
         lock.withLock {
             calls.append("removePolicy:\(name)")
-            removePolicyCalls.append((ruleId, resource))
-            return removePolicyResult
+            removePolicyCalls.append((name, ruleId, resource))
         }
+        await waitIfGated("remove")
+        return lock.withLock { removePolicyResult }
     }
 }

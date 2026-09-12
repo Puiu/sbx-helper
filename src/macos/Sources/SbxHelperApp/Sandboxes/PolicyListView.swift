@@ -9,6 +9,12 @@ import SbxAppCore
 /// rules get a remove button; kit/global rows render dimmed with none.
 struct PolicyListView: View {
     @Environment(SandboxesModel.self) private var environmentSandboxes
+    // The selection the last fetch was issued for. `.task(id:)` restarts
+    // not only on selection change but whenever the view re-enters the
+    // hierarchy (e.g. switching back to this tab) — without this guard
+    // every return would clear the pane to "Loading…" and respawn
+    // `sbx policy ls`, where app.js only fetches on `selectSandbox`.
+    @State private var fetchedFor: String?
 
     var body: some View {
         @Bindable var sandboxes = environmentSandboxes
@@ -56,9 +62,14 @@ struct PolicyListView: View {
         // Fires on appearance and on every selection change, cancelling the
         // previous fetch — the native analogue of app.js's
         // `selectSandbox` → `fetchPolicies`. The model's generation guard
-        // discards anything cancellation doesn't catch.
+        // discards anything cancellation doesn't catch. The `fetchedFor`
+        // guard keeps hierarchy re-entries (tab switches) with an unchanged
+        // selection from refetching.
         .task(id: sandboxes.selectedName) {
-            await sandboxes.fetchPolicies()
+            if fetchedFor != sandboxes.selectedName {
+                fetchedFor = sandboxes.selectedName
+                await sandboxes.fetchPolicies()
+            }
         }
     }
 }
