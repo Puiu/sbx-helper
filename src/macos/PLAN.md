@@ -259,7 +259,25 @@ delete-confirm alert), the list/row/detail/toolbar views, and `SbxCLI`'s
 mutating calls with `requireKnownSandbox` on every one — `SandboxesModelTests`
 (21) and `SbxCLITests` (19) green, full suite 399/399.
 
-**Phase 7 (Policies) is next.** Everything else from Phase 7 onward is still as originally
+**Phase 7 (Policies) closed (2026-09-12) — full parity.** `PolicyRule.scopeLabel`
++ `policySummary(_)` in `SbxKit` (`PolicyDisplayTests`, 5); a narrow
+`PolicyControlling` seam in `SbxServices`; policy state + `fetchPolicies()` /
+`addPolicy()` / `removePolicy(_:)` on `SandboxesModel` with a generation guard
+against stale fetches, busy-entry guards, and an honest unknown state
+(`policyLoadFailed` → "Couldn't load policy rules.") instead of a stuck
+"Loading…" or a fake "0 rules" (`SandboxesPolicyTests`, 18); and
+`Sandboxes/PolicyListView.swift` (decision badge, scope label, × only when
+`removable`, wrapping resource chips, allow/deny + field + Add + inline
+error) embedded in `SandboxDetailView`, fetching on selection change
+(`.task(id:)` + a reappear guard so tab switches don't refetch). Two
+deliberate fixes over the JS: singular "1 rule applies" (the JS
+interpolates "1 rule apply"), and id-less rules are not `removable` (their
+× button could never succeed). Full suite 423/423 green; release build,
+ad-hoc packaging, and app liveness (launch → alive → no crash reports →
+clean quit) all verified. A fresh-eyes `/feature-review` found 11 issues;
+all fixed and re-verified.
+
+**Phase 8 (Polish) is next.** Everything else from Phase 8 onward is still as originally
 planned.
 
 ## Context
