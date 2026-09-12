@@ -32,3 +32,143 @@ The statusline is wired through `/etc/claude-code/managed-settings.json`, not
 (re)create, so a `statusLine` entry placed there is silently destroyed. `/etc/claude-code` is untouched
 by `sbx` and loads at Claude Code's highest-precedence (policy) tier, so it survives recreates. Don't
 move the statusline wiring back to `~/.claude/settings.json`.
+
+### Preinstalled skills (superpowers, Claude template `v5+`)
+
+The image ships with the superpowers plugin baked in — no manual install
+per sandbox:
+
+- The managed `/etc/claude-code/managed-settings.json` pre-registers the
+  `superpowers-marketplace` (`extraKnownMarketplaces`) and enables
+  `superpowers@superpowers-marketplace` (`enabledPlugins`), so both survive
+  sbx (re)creates.
+- The plugin + marketplace caches (`~/.claude/plugins/…`) are pre-installed
+  during `docker build` (HTTPS source, no SSH keys needed).
+
+### Context7 docs lookup (Claude template `v5+`)
+
+The image also ships with the Context7 plugin (`context7@context7-marketplace`,
+marketplace `upstash/context7`): the `context7_resolve-library-id` /
+`context7_query-docs` MCP tools plus the auto-triggering docs skill, the
+`docs-researcher` agent, and `/context7:docs`. Same pattern as superpowers —
+managed registration + enablement, caches pre-installed at build time.
+
+It works without an API key (anonymous tier, lower rate limits). To use your
+own plan, store the key once and allow the MCP host:
+
+```console
+$ export CONTEXT7_API_KEY="<paste-your-key>"   # host only, never commit it
+$ sbx secret set-custom \
+    --host mcp.context7.com \
+    --env CONTEXT7_API_KEY \
+    --value "$CONTEXT7_API_KEY"
+$ sbx policy allow network mcp.context7.com:443
+```
+
+Recreate existing sandboxes after adding the secret. The plugin reads
+`CONTEXT7_API_KEY` from the environment automatically; unset means anonymous
+tier. Fallback if the pre-install had no network at build time:
+
+```console
+$ claude plugin install context7@context7-marketplace
+```
+
+Fallback: if the pre-install had no network at build time, run once inside
+the sandbox (marketplace is already known via managed settings, no `add`
+step needed):
+
+```console
+$ claude plugin install superpowers@superpowers-marketplace
+$ claude plugin install context7@context7-marketplace
+```
+
+Rebuilding with a bumped tag is also how you pick up new superpowers /
+Context7 releases. Note `claude/dotnet/build-sandbox.sh` builds from the
+`sbx-vm-configurator/` root as context (that is where
+`statusline-command.sh` lives).
+
+---
+
+## OpenCode (.NET 10 template: `opencode/dotnet/`)
+
+Same .NET 10 SDK + global tools as the Claude template, but based on
+`docker/sandbox-templates:opencode-docker` (run it with `sbx run opencode`,
+not `claude`). Managed config lives at `/etc/opencode/opencode.json`
+(the Linux managed tier); the image only references the Zen key via
+`{env:OPENCODE_API_KEY}` — the secret itself is never baked into the image.
+
+### Supplying your OpenCode (Zen) API key
+
+Sandboxes do not see your host's `~/.config/opencode/` or `auth.json`.
+Store the key once in sbx's secret store; the sandbox proxy injects it
+at runtime as `OPENCODE_API_KEY`:
+
+```console
+$ export OPENCODE_API_KEY="<paste-your-zen-key>"   # host only, never commit it
+$ sbx secret set-custom \
+    --host opencode.ai \
+    --env OPENCODE_API_KEY \
+    --value "$OPENCODE_API_KEY"
+$ sbx policy allow network opencode.ai:443
+```
+
+Then build/load/run from `opencode/dotnet/` (or via its
+`build-sandbox.sh`, defaults to tag `v3`):
+
+```console
+$ docker build -f Dockerfile -t opencode-sbx-dotnet10:v3 ../..
+$ docker image save opencode-sbx-dotnet10:v3 -o opencode-sbx-dotnet10-v3.tar
+$ sbx template load opencode-sbx-dotnet10-v3.tar
+$ sbx run --template opencode-sbx-dotnet10:v3 opencode ~/my-project
+```
+
+Notes:
+
+- If you added the secret after creating a sandbox, recreate it
+  (`sbx rm` + `sbx run`) so the new env var is present inside.
+- Verify inside: `opencode debug config` shows the resolved managed
+  config; `/models` lists Zen models without pasting the key again.
+- Troubleshoot: empty key → sandbox predates the secret (recreate);
+  403/auth failure → secret stored against the wrong `--host`
+  (must be `opencode.ai`); network denied → the `policy allow` step
+  is missing.
+- Direct provider keys (Anthropic/OpenAI/…) use the built-in path
+  instead: `sbx secret set anthropic`, etc. — no `set-custom` needed.
+
+### Preinstalled skills (superpowers + Context7, opencode template `v3+`)
+
+Yes — the image ships with the superpowers and Context7 (`@upstash/context7-opencode`)
+plugins baked in, so you never install them manually per sandbox:
+
+- Both are declared in the managed `/etc/opencode/opencode.json`
+  `"plugin"` array, which survives sbx (re)creates even though user-level
+  `~/.config/opencode/` does not.
+- Their install caches (`~/.cache/opencode/packages/…`) are pre-warmed during
+  `docker build`, so first start needs no download. Context7 adds the
+  `context7_resolve-library-id` / `context7_query-docs` MCP tools plus the
+  auto-triggering `context7-mcp` skill.
+
+Context7 works without an API key (anonymous tier). To use your own plan,
+same pattern as the Zen key — the plugin reads `CONTEXT7_API_KEY` from the
+environment automatically:
+
+```console
+$ export CONTEXT7_API_KEY="<paste-your-key>"   # host only, never commit it
+$ sbx secret set-custom \
+    --host mcp.context7.com \
+    --env CONTEXT7_API_KEY \
+    --value "$CONTEXT7_API_KEY"
+$ sbx policy allow network mcp.context7.com:443
+```
+
+Recreate existing sandboxes after adding the secret.
+
+Fallback: if the cache is ever cold (e.g. pre-warm had no network at build
+time), opencode reinstalls the plugin automatically on first start — that
+path needs `github.com` + npm registry network in the sandbox policy.
+
+Adding more plugins: extend the `"plugin"` array in
+`opencode/dotnet/Dockerfile`'s managed config and add a matching
+`opencode plugin "<spec>" -g` pre-warm line, rebuild with a new tag, and
+reload via `sbx template load`. Rebuilding with a bumped tag is also how
+you pick up new superpowers releases (the pre-warm clones latest `main`).

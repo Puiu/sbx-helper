@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 #
-# Builds the custom Claude Code sandbox image, exports it, loads it into
+# Builds the custom OpenCode sandbox image, exports it, loads it into
 # sbx's local template store, and starts a sandbox from it.
 #
 # Usage:
-#   ./build-and-run-sandbox.sh [workspace-path]
+#   ./build-sandbox.sh [workspace-path]
 #
 # Config (override via env var):
-#   IMAGE_NAME  (default: claude-sbx-dotnet10)
+#   IMAGE_NAME  (default: opencode-sbx-dotnet10)
 #   IMAGE_TAG   (default: v3)  -- bump this each time you rebuild
+#
+# Zen API key: NOT baked into the image. Supply it at runtime via
+#   sbx secret set-custom --host opencode.ai --env OPENCODE_API_KEY --value "$OPENCODE_API_KEY"
+# plus `sbx policy allow network opencode.ai:443` (see README.md).
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTEXT_DIR="$(dirname "${SCRIPT_DIR}")"  # statusline-command.sh lives one level up
+CONTEXT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"  # statusline-command.sh lives at the sbx-vm-configurator root
 
-IMAGE_NAME="${IMAGE_NAME:-claude-sbx-dotnet10}"
+IMAGE_NAME="${IMAGE_NAME:-opencode-sbx-dotnet10}"
 IMAGE_TAG="${IMAGE_TAG:-v3}"
 FULL_TAG="${IMAGE_NAME}:${IMAGE_TAG}"
 TAR_FILE="${SCRIPT_DIR}/${IMAGE_NAME}-${IMAGE_TAG}.tar"
@@ -37,6 +41,11 @@ docker image save "${FULL_TAG}" -o "${TAR_FILE}"
 echo "==> Step 4: Loading template into sbx"
 sbx template load "${TAR_FILE}"
 
+# remove TAR_FILE after loading it into sbx
+echo "==> Step 4b: Removing exported image file ${TAR_FILE}"
+rm -f "${TAR_FILE}"
+echo "==> Finished removing exported image file ${TAR_FILE}"
+
 # echo "==> Step 5: Starting sandbox from ${FULL_TAG} in ${WORKSPACE}"
 # echo "    (Step 6: once inside, run 'dotnet --version' to confirm the SDK)"
-# sbx run --template "${FULL_TAG}" claude "${WORKSPACE}"
+# sbx run --template "${FULL_TAG}" opencode "${WORKSPACE}"
