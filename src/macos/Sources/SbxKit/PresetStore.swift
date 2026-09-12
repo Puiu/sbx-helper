@@ -18,7 +18,8 @@ public func buildPreset(
     sandboxName: String?,
     clone: Bool,
     editable: [String],
-    readOnly: [String]
+    readOnly: [String],
+    agent: String = ""
 ) throws(SbxKitError) -> Preset {
     let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedName.isEmpty else { throw .presetNameRequired }
@@ -26,6 +27,7 @@ public func buildPreset(
     let trimmedTemplate = template.trimmingCharacters(in: .whitespacesAndNewlines)
     let resolvedTemplate = trimmedTemplate.isEmpty ? defaultTemplate : trimmedTemplate
     let trimmedSandboxName = (sandboxName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedAgent = agent.trimmingCharacters(in: .whitespacesAndNewlines)
     let preset = Preset(
         name: trimmedName,
         rootPath: rootPath,
@@ -33,7 +35,8 @@ public func buildPreset(
         sandboxName: trimmedSandboxName.isEmpty ? nil : trimmedSandboxName,
         clone: clone,
         editable: editable,
-        readOnly: readOnly
+        readOnly: readOnly,
+        agent: trimmedAgent
     )
     return relativizePreset(rootPath: rootPath, preset)
 }

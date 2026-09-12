@@ -4,6 +4,35 @@
 /// Per-agent default trailing args for "Run" on an existing sandbox.
 let agentDefaultArgs: [String: [String]] = ["claude": ["--model", "opusplan"]]
 
+/// Every built-in agent `sbx run` accepts (from `sbx run --help`'s
+/// "Available agents" line). Order is the CLI's own order.
+public let supportedAgents: [String] = [
+    "claude", "codex", "copilot", "cursor", "devin", "docker-agent",
+    "droid", "gemini", "kiro", "opencode", "shell",
+]
+
+/// Infers the agent from a template name via case-insensitive substring
+/// match, or nil when no agent name appears (caller keeps the current
+/// selection). Earliest occurrence in the template wins on multiple
+/// matches; ties fall back to `supportedAgents` order.
+public func inferAgent(fromTemplate template: String) -> String? {
+    guard !template.isEmpty else { return nil }
+    let lowered = template.lowercased()
+    var best: (offset: Int, order: Int, agent: String)?
+    for (order, agent) in supportedAgents.enumerated() {
+        guard let range = lowered.range(of: agent.lowercased()) else { continue }
+        let offset = lowered.distance(from: lowered.startIndex, to: range.lowerBound)
+        if let current = best {
+            if offset < current.offset || (offset == current.offset && order < current.order) {
+                best = (offset, order, agent)
+            }
+        } else {
+            best = (offset, order, agent)
+        }
+    }
+    return best?.agent
+}
+
 /// Default agent-args tail for `agent`, or [] if it has none.
 public func defaultAgentArgs(_ agent: String) -> [String] {
     agentDefaultArgs[agent] ?? []

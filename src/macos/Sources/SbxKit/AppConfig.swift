@@ -12,16 +12,20 @@ public struct Preset: Sendable, Equatable, Codable, Identifiable {
     public var clone: Bool
     public var editable: [String]
     public var readOnly: [String]
+    /// The agent selected when the preset was saved. Empty for presets
+    /// written before the Builder gained the agent picker — loading such a
+    /// preset leaves the current agent untouched.
+    public var agent: String
 
     public var id: String { name }
 
     private enum CodingKeys: String, CodingKey {
-        case name, rootPath, template, sandboxName, clone, editable, readOnly
+        case name, rootPath, template, sandboxName, clone, editable, readOnly, agent
     }
 
     public init(
         name: String, rootPath: String, template: String, sandboxName: String?, clone: Bool,
-        editable: [String], readOnly: [String]
+        editable: [String], readOnly: [String], agent: String = ""
     ) {
         self.name = name
         self.rootPath = rootPath
@@ -30,6 +34,7 @@ public struct Preset: Sendable, Equatable, Codable, Identifiable {
         self.clone = clone
         self.editable = editable
         self.readOnly = readOnly
+        self.agent = agent
     }
 
     // A naive synthesized Codable conformance regresses here: one
@@ -45,6 +50,7 @@ public struct Preset: Sendable, Equatable, Codable, Identifiable {
         clone = c.lenient(.clone, false)
         editable = c.lenientArray(.editable, [])
         readOnly = c.lenientArray(.readOnly, [])
+        agent = c.lenient(.agent, "")
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -56,6 +62,7 @@ public struct Preset: Sendable, Equatable, Codable, Identifiable {
         try c.encode(clone, forKey: .clone)
         try c.encode(editable, forKey: .editable)
         try c.encode(readOnly, forKey: .readOnly)
+        try c.encode(agent, forKey: .agent)
     }
 }
 

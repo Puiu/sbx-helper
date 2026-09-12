@@ -14,6 +14,7 @@ public final class BuilderModel {
     private let launcher: TerminalLaunching
     private let clipboard: ClipboardWriting
     private let persistTemplate: @Sendable (String) async -> Void
+    private let persistAgent: @Sendable (String) async -> Void
     private let mutateConfig: @Sendable (@escaping @Sendable (inout AppConfig) -> Void) async -> Void
     private let pathExists: @Sendable (String) -> Bool
     private let pathIsDirectory: @Sendable (String) -> Bool
@@ -81,6 +82,7 @@ public final class BuilderModel {
         launcher: TerminalLaunching,
         clipboard: ClipboardWriting,
         persistTemplate: @escaping @Sendable (String) async -> Void,
+        persistAgent: @escaping @Sendable (String) async -> Void = { _ in },
         pathExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         mutateConfig: @escaping @Sendable (@escaping @Sendable (inout AppConfig) -> Void) async -> Void = { _ in },
         revealer: FinderRevealing = SystemFinder(),
@@ -96,6 +98,7 @@ public final class BuilderModel {
         self.launcher = launcher
         self.clipboard = clipboard
         self.persistTemplate = persistTemplate
+        self.persistAgent = persistAgent
         self.pathExists = pathExists
         self.mutateConfig = mutateConfig
         self.revealer = revealer
@@ -108,7 +111,8 @@ public final class BuilderModel {
     /// one — mirrors app.js:1373's `state.template = data.config.defaultTemplate`
     /// at init, without clobbering a later selection on a later `adopt`.
     public func adopt(config: AppConfig) {
-        agent = config.agent
+        let trimmedAgent = config.agent.trimmingCharacters(in: .whitespacesAndNewlines)
+        agent = trimmedAgent.isEmpty ? defaultConfig().agent : trimmedAgent
         defaultTemplate = config.defaultTemplate
         if template.isEmpty {
             template = config.defaultTemplate
@@ -159,6 +163,20 @@ public final class BuilderModel {
         let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
         template = trimmed.isEmpty ? defaultTemplate : trimmed
         await persistTemplate(effectiveTemplate)
+        if let inferred = inferAgent(fromTemplate: effectiveTemplate), inferred != agent {
+            agent = inferred
+            await persistAgent(inferred)
+        }
+    }
+
+    /// Ports the agent radio group's change handler: assigns and persists.
+    /// Blank values are ignored — there is always a runnable agent, same as
+    /// `commitTemplate`'s blank-falls-back-to-default rule for templates.
+    public func setAgent(_ candidate: String) async {
+        let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        agent = trimmed
+        await persistAgent(trimmed)
     }
 
     /// Paths currently marked editable, in JS-ordinal order (matching
@@ -252,6 +270,7 @@ public final class BuilderModel {
                 toasts.show(result.error ?? "Could not open a terminal window.", isError: true)
             }
             await persistTemplate(effectiveTemplate)
+            await persistAgent(agent)
         } catch {
             toasts.show(error.errorDescription ?? "", isError: true)
         }
@@ -329,7 +348,8 @@ public final class BuilderModel {
             preset = try buildPreset(
                 name: name, rootPath: rootPath, template: template,
                 defaultTemplate: defaultTemplate, sandboxName: sandboxName,
-                clone: clone, editable: editablePaths, readOnly: readOnlyPaths
+                clone: clone, editable: editablePaths, readOnly: readOnlyPaths,
+                agent: agent
             )
         } catch {
             return error.errorDescription ?? ""
@@ -424,6 +444,13 @@ public final class BuilderModel {
         }
         primary = nil
         template = preset.template
+        // A stored agent wins over the current one; a legacy preset without
+        // one (agent == "") leaves it untouched. Session-only, exactly like
+        // `template` above — persistence happens on the next setAgent,
+        // commitTemplate, or run, not on load.
+        if !preset.agent.isEmpty {
+            agent = preset.agent
+        }
         sandboxName = preset.sandboxName ?? ""
         clone = preset.clone
         cursor = tree.nodes.first?.path

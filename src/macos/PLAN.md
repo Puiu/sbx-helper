@@ -277,8 +277,36 @@ ad-hoc packaging, and app liveness (launch → alive → no crash reports →
 clean quit) all verified. A fresh-eyes `/feature-review` found 11 issues;
 all fixed and re-verified.
 
-**Phase 8 (Polish) is next.** Everything else from Phase 8 onward is still as originally
-planned.
+**Phase 8 (Polish) closed (2026-09-12).** `AppModel.sbxAvailable` /
+`checkSbxAvailability()` / `sbxBanner` behind an injectable `sbxProbe`
+seam (`SbxAvailabilityTests`, 4); `validateSbxPath` in `SbxKit`
+(absolute + exists + executable, matching `ToolLocator`'s
+`isExecutableFile` gate) with binary-specific `SbxKitError` cases
+(`sbxPathMustBeAbsolute`, `sbxNotFound`) instead of the folder-worded
+ones (`SbxPathValidationTests`, 6); a `Settings` scene (⌘,) owning the
+`sbxPath` field with inline validation, a Save busy guard, locator
+refresh, and availability recheck; the banner rendered in `RootView`
+under the config banner; the production probe invalidating the locator
+cache before re-resolving so mid-session uninstalls are detected too.
+`BuilderModel.hasCompletedScan` so the new "No folders found." empty
+state shows only after a scan actually lands, never on first paint
+(`ScanCoordinationTests` +2); a genuine dark-mode fix pairing
+`ToastOverlay`'s text with `Theme.paper` (hardcoded `.white` was
+illegible on near-white `Theme.ink`); the temp sweep extracted to a
+testable seam and covered (`TerminalLauncherTests` +1);
+`Scripts/install.sh` (installs the built `SbxHelperApp.app` as
+`/Applications/sbx-helper.app`, replacing the Electron build),
+`Scripts/setup_dev_signing.sh` (stable self-signed identity so TCC
+grants survive rebuilds), `compile_and_run.sh` no longer pinning
+`SIGNING_MODE=adhoc` (which would have defeated the identity);
+`README.md` + `CLAUDE.md`; `src/electron/` stays frozen as the parity
+reference. Full suite 436/436 green (13 new); release build, ad-hoc
+packaging (`spctl --assess` accepted), install dry-run to a temp path,
+and app liveness (alive → clean quit → no crash reports) all verified.
+A fresh-eyes `/feature-review` found 9 issues; findings 1–6 were fixed
+and re-verified, 7–9 left out of scope. The sighted GUI walkthrough
+(PLAN.md Verification 1–7, banner/Settings round-trip, light/dark pass)
+still needs a human with a display, as in every prior phase.
 
 ## Context
 

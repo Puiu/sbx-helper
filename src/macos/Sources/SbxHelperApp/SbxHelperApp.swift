@@ -68,6 +68,9 @@ struct SbxHelperApp: App {
             persistTemplate: { [appModel] template in
                 await appModel.update { $0.defaultTemplate = template }
             },
+            persistAgent: { [appModel] agent in
+                await appModel.update { $0.agent = agent }
+            },
             mutateConfig: { [appModel] transform in
                 await appModel.update(transform)
             },

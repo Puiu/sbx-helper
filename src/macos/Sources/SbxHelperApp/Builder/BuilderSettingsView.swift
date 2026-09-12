@@ -1,5 +1,6 @@
 import SwiftUI
 import SbxAppCore
+import SbxKit
 
 /// Ports app.js's template/name/clone controls (index.html:52-68,
 /// populateTemplateSelect 415-439, the change handlers 1325-1351).
@@ -38,6 +39,20 @@ struct BuilderSettingsView: View {
                             if old == .customTemplate, new != .customTemplate { commit(builder) }
                         }
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Agent")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+
+                Picker("Agent", selection: agentSelection(for: builder)) {
+                    ForEach(supportedAgents, id: \.self) { agent in
+                        Text(agent).tag(agent)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.radioGroup)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -86,5 +101,19 @@ struct BuilderSettingsView: View {
     private func commit(_ builder: BuilderModel) {
         showCustomField = false
         Task { await builder.commitTemplate(customTemplateText) }
+    }
+
+    /// Radio-group selection for the agent list. Reads the model's current
+    /// agent; a pick assigns through `setAgent`, which persists to
+    /// `config.agent`. A hand-edited config agent outside `supportedAgents`
+    /// matches no tag and renders with nothing selected — picking any radio
+    /// then fixes it, same spirit as the template's "Custom…" escape hatch.
+    private func agentSelection(for builder: BuilderModel) -> Binding<String> {
+        Binding(
+            get: { builder.agent },
+            set: { newValue in
+                Task { await builder.setAgent(newValue) }
+            }
+        )
     }
 }
