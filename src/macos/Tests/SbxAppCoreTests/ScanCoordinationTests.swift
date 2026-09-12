@@ -159,4 +159,27 @@ struct ScanCoordinationTests {
 
         #expect(model.inFlightTaskCountForTesting == 0)
     }
+
+    @Test
+    func hasCompletedScanStartsFalse() {
+        let scanner = StubScanner()
+        let model = BuilderModel(scanner: scanner, toasts: ToastCenter(), templateLister: StubTemplateLister(), launcher: StubLauncher(), clipboard: StubClipboard(), persistTemplate: { _ in }, spinnerDelay: .seconds(10))
+
+        #expect(model.hasCompletedScan == false)
+    }
+
+    @Test
+    func hasCompletedScanBecomesTrueOnceAScanLands() async {
+        let scanner = StubScanner()
+        scanner.setResult(ScannedTree(nodes: [Self.node("/root")]), for: "/root")
+        let model = BuilderModel(scanner: scanner, toasts: ToastCenter(), templateLister: StubTemplateLister(), launcher: StubLauncher(), clipboard: StubClipboard(), persistTemplate: { _ in }, spinnerDelay: .seconds(10))
+        model.scan(root: "/root", maxDepth: 3, ignoreFolders: [])
+
+        #expect(model.hasCompletedScan == false)
+
+        scanner.release("/root")
+        await model.quiesce()
+
+        #expect(model.hasCompletedScan == true)
+    }
 }

@@ -14,7 +14,11 @@ struct ToastOverlay: View {
             if let toast = toasts.current {
                 Text(toast.message)
                     .font(.system(size: 12.5))
-                    .foregroundStyle(.white)
+                    // Pairs with the `Theme.ink` fill below — the JS's
+                    // `background: var(--ink); color: var(--paper)` exactly.
+                    // A hardcoded `.white` here is illegible in dark mode,
+                    // where `Theme.ink` resolves near-white.
+                    .foregroundStyle(Theme.paper)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(

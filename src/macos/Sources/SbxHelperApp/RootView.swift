@@ -11,6 +11,9 @@ struct RootView: View {
             if let banner = app.configBanner {
                 ErrorBanner(message: banner)
             }
+            if let sbxBanner = app.sbxBanner {
+                ErrorBanner(message: sbxBanner)
+            }
 
             switch app.activeTab {
             case .builder:

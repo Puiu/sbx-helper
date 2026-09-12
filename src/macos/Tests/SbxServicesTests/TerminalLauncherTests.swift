@@ -102,4 +102,29 @@ struct TerminalLauncherTests {
         #expect(result.ok == false)
         #expect(result.error != nil)
     }
+
+    @Test("the stale-temp sweep removes only old sbx-helper-* dirs")
+    func sweepRemovesOnlyStaleAppDirs() throws {
+        let fm = FileManager.default
+        let tmp = fm.temporaryDirectory.appendingPathComponent("sweep-test-\(UUID().uuidString)").path
+        try fm.createDirectory(atPath: tmp, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(atPath: tmp) }
+
+        let stale = (tmp as NSString).appendingPathComponent("sbx-helper-old")
+        let fresh = (tmp as NSString).appendingPathComponent("sbx-helper-new")
+        let other = (tmp as NSString).appendingPathComponent("not-ours-old")
+        for dir in [stale, fresh, other] {
+            try fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        }
+        let oldDate = Date().addingTimeInterval(-48 * 3600)
+        try fm.setAttributes([.modificationDate: oldDate], ofItemAtPath: stale)
+        try fm.setAttributes([.modificationDate: oldDate], ofItemAtPath: other)
+
+        TerminalLauncher.sweepStaleTempDirs(
+            atPath: tmp, olderThan: Date().addingTimeInterval(-24 * 3600))
+
+        #expect(fm.fileExists(atPath: stale) == false)
+        #expect(fm.fileExists(atPath: fresh) == true)
+        #expect(fm.fileExists(atPath: other) == true)
+    }
 }

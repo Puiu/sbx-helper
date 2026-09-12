@@ -46,7 +46,10 @@ if [[ -n "${RELEASE_ARCHES}" ]]; then
 fi
 
 log "==> package app"
-SIGNING_MODE=adhoc ARCHES="${ARCHES_VALUE}" "${ROOT_DIR}/Scripts/package_app.sh" release
+# No SIGNING_MODE here: package_app.sh signs ad-hoc unless APP_IDENTITY is
+# set (see setup_dev_signing.sh) — forcing a default here would pin every
+# dev-loop build to ad-hoc and re-prompt TCC on each rebuild.
+ARCHES="${ARCHES_VALUE}" "${ROOT_DIR}/Scripts/package_app.sh" release
 
 log "==> launch app"
 if ! open "${APP_BUNDLE}"; then

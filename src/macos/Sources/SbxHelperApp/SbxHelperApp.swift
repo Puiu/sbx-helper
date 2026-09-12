@@ -32,7 +32,16 @@ struct SbxHelperApp: App {
         let cli = SbxCLI(commandRunner: runner, toolLocator: locator)
 
         let toasts = ToastCenter()
-        let appModel = AppModel(configStore: configStore)
+        // The availability probe closes over `locator` (an actor, so the
+        // closure stays `@Sendable`). It invalidates first and re-resolves
+        // every time: `resolvedPath` caches successes, and a check that
+        // trusted the cache would never notice `sbx` being uninstalled
+        // mid-session. Checks only run at launch and after a Settings
+        // save, so the occasional shell-probe cost is fine.
+        let appModel = AppModel(configStore: configStore, sbxProbe: {
+            await locator.invalidateCache()
+            return await locator.resolvedPath() != nil
+        })
         _toasts = State(initialValue: toasts)
         _app = State(initialValue: appModel)
         let terminalLauncher = TerminalLauncher(commandRunner: runner)
@@ -75,9 +84,10 @@ struct SbxHelperApp: App {
                 .environment(toasts)
                 .task {
                     await app.load()
-                    // Seam for the future Settings sheet: if `sbxPath` ever
-                    // becomes user-editable at runtime, this is where the
-                    // locator picks it up (same value today — no re-resolve).
+                    // The Settings sheet can change `sbxPath` at runtime —
+                    // pick it up here too, in case it changed on disk since
+                    // the synchronous load in `init()` (same value
+                    // otherwise — no re-resolve).
                     await locator.updateConfiguredPath(app.config.sbxPath)
                     appDelegate.onTerminate = { await app.flush() }
                     builder.adopt(config: app.config)
@@ -91,7 +101,15 @@ struct SbxHelperApp: App {
                     // (SbxCLI.listTemplates's own timeout), so it must not
                     // delay the scan or the config adoption above it.
                     await builder.loadTemplates()
+                    // After templates for the same reason: the shell-probe
+                    // fallback inside `resolvedPath` can take up to 2s, and
+                    // the banner it drives must never delay first paint.
+                    await app.checkSbxAvailability()
                 }
+        }
+        Settings {
+            SettingsView(locator: locator)
+                .environment(app)
         }
         // Matches the Electron window (electron-main.mjs: 1280×860, min
         // 900×560). `.contentMinSize`, not `.contentSize` — the split view

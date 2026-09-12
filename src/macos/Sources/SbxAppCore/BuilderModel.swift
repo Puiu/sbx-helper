@@ -27,6 +27,12 @@ public final class BuilderModel {
     public private(set) var expanded: Set<String> = []
     public var cursor: String?
     public private(set) var isScanning: Bool = false
+    /// True once the first scan result has landed. Never reset: a rescan
+    /// keeps displaying the previous tree until the new result lands, so
+    /// only the pre-first-scan window (empty tree, nothing to show yet) is
+    /// "not completed". Lets the tree view tell "nothing scanned yet" apart
+    /// from "scanned, and it came back empty".
+    public private(set) var hasCompletedScan: Bool = false
 
     // path -> kind. Absence of a key is the third ("off") state — mirrors
     // app.js's `state.selection` Map exactly (see SelectionKind.swift).
@@ -506,6 +512,7 @@ public final class BuilderModel {
             guard !Task.isCancelled, self.scanGeneration == generation else { return }
             self.currentSpinnerTask?.cancel()
             self.tree = result
+            self.hasCompletedScan = true
             self.rootPath = root
             if isRootChange {
                 self.expanded = []

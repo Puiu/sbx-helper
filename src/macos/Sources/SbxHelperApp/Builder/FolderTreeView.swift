@@ -14,7 +14,16 @@ struct FolderTreeView: View {
         let rows = builder.visibleRows
 
         ZStack {
-            if rows.isEmpty, !builder.tree.nodes.isEmpty {
+            if builder.tree.nodes.isEmpty, builder.hasCompletedScan, !builder.isScanning {
+                // The scan came back with nothing at all (e.g. an empty or
+                // fully-ignored root) — distinct from "No folders match.",
+                // which means the filter hid every row of a non-empty tree.
+                Text("No folders found.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else if rows.isEmpty, !builder.tree.nodes.isEmpty {
                 Text("No folders match.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)

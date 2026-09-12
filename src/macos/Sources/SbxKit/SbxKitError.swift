@@ -43,6 +43,16 @@ public enum SbxKitError: Error, Equatable, Sendable, LocalizedError {
     case revealPathMustBeAbsolute
     /// server.mjs apiReveal — "Not a directory: <path>" (apiScan shares it)
     case notADirectory(path: String)
+    /// Phase 8's Settings sheet — native-only, no JS counterpart (the
+    /// Electron app had no sbx-path setting): "sbx path must be an
+    /// absolute path."
+    case sbxPathMustBeAbsolute
+    /// Phase 8's Settings sheet — native-only: "sbx not found: <path>".
+    /// Thrown both when nothing exists there and when something exists but
+    /// isn't executable, matching `ToolLocator` (which gates on
+    /// `isExecutableFile`): from the app's perspective the binary is
+    /// unusable at that path either way.
+    case sbxNotFound(path: String)
 
     public var errorDescription: String? {
         switch self {
@@ -84,6 +94,10 @@ public enum SbxKitError: Error, Equatable, Sendable, LocalizedError {
             "path must be an absolute path."
         case .notADirectory(let path):
             "Not a directory: \(path)"
+        case .sbxPathMustBeAbsolute:
+            "sbx path must be an absolute path."
+        case .sbxNotFound(let path):
+            "sbx not found: \(path)"
         }
     }
 }

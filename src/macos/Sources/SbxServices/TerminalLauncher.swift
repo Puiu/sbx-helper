@@ -111,10 +111,14 @@ public struct TerminalLauncher: TerminalLaunching {
     /// sources the script asynchronously — so this only ever removes dirs
     /// old enough (24h) to be certainly done with.
     private func sweepStaleTempDirs() {
+        Self.sweepStaleTempDirs(atPath: NSTemporaryDirectory(), olderThan: Date().addingTimeInterval(-24 * 3600))
+    }
+
+    /// The sweep itself, parameterized for tests — production always passes
+    /// `NSTemporaryDirectory()` with a 24h cutoff via `sweepStaleTempDirs()`.
+    static func sweepStaleTempDirs(atPath tmp: String, olderThan cutoff: Date) {
         let fm = FileManager.default
-        let tmp = NSTemporaryDirectory()
         guard let entries = try? fm.contentsOfDirectory(atPath: tmp) else { return }
-        let cutoff = Date().addingTimeInterval(-24 * 3600)
         for entry in entries where entry.hasPrefix("sbx-helper-") {
             let full = (tmp as NSString).appendingPathComponent(entry)
             guard let attrs = try? fm.attributesOfItem(atPath: full),

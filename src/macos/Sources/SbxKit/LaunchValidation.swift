@@ -23,6 +23,21 @@ public func validateLaunchPaths(
     }
 }
 
+/// Ports the Settings sheet's `sbx` location validation (Phase 8): a
+/// user-typed `sbx` path must be absolute and resolve to something
+/// `ToolLocator` would accept — existing AND executable (the locator gates
+/// on `isExecutableFile`, so validation must too, or a "successful" Save
+/// leaves the banner up). Errors are binary-specific cases, not the
+/// workspace/folder ones, since the sheet surfaces them verbatim.
+public func validateSbxPath(
+    _ path: String,
+    exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+    isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+) throws(SbxKitError) {
+    guard path.hasPrefix("/") else { throw .sbxPathMustBeAbsolute }
+    guard exists(path), isExecutable(path) else { throw .sbxNotFound(path: path) }
+}
+
 /// Ports src/electron/server.mjs's apiReveal (284-300) path checks: the
 /// reveal endpoint, unlike apiRun, additionally requires directory-ness
 /// (a file path is rejected, not opened). Order matches the JS: absolute,

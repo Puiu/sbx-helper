@@ -34,6 +34,11 @@ struct ErrorMessageParityTests {
             (SbxKitError.pathNotFound(path: "/root/gone"), "Not found: /root/gone"),
             (SbxKitError.notADirectory(path: "/root/file"), "Not a directory: /root/file"),
             (SbxKitError.revealPathMustBeAbsolute, "path must be an absolute path."),
+            // Native-only (Phase 8 Settings sheet, no JS counterpart) —
+            // listed here so the messages stay pinned, not because they
+            // match any JS string.
+            (SbxKitError.sbxPathMustBeAbsolute, "sbx path must be an absolute path."),
+            (SbxKitError.sbxNotFound(path: "/opt/homebrew/bin/sbx"), "sbx not found: /opt/homebrew/bin/sbx"),
         ]
     )
     func messageMatchesJS(error: SbxKitError, expected: String) {

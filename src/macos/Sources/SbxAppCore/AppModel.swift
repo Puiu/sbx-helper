@@ -12,10 +12,18 @@ public final class AppModel {
     public private(set) var config: AppConfig
     public var activeTab: AppTab = .builder
     public private(set) var configBanner: String?
+    /// Whether the `sbx` binary resolves right now — nil until the first
+    /// `checkSbxAvailability()`. Tracked separately from `configBanner`:
+    /// a missing binary is an environment problem with a Settings fix, not
+    /// a degraded config, and it must surface as its own banner rather than
+    /// an empty template list (PLAN.md Phase 8).
+    public private(set) var sbxAvailable: Bool?
+    private let sbxProbe: @Sendable () async -> Bool
 
-    public init(configStore: ConfigStore) {
+    public init(configStore: ConfigStore, sbxProbe: @escaping @Sendable () async -> Bool = { true }) {
         self.configStore = configStore
         self.config = defaultConfig()
+        self.sbxProbe = sbxProbe
     }
 
     public func load() async {
@@ -29,6 +37,21 @@ public final class AppModel {
 
     public func flush() async {
         await configStore.flush()
+    }
+
+    /// Re-resolves `sbx` through the injected probe. Called at launch and
+    /// after the Settings sheet saves a new `sbxPath`. The production probe
+    /// re-resolves fresh each time (see SbxHelperApp), so both installing
+    /// AND uninstalling `sbx` mid-session are picked up by the next check.
+    public func checkSbxAvailability() async {
+        sbxAvailable = await sbxProbe()
+    }
+
+    /// The persistent "sbx not found" banner (PLAN.md Phase 8) — nil while
+    /// availability is unknown or the binary resolves. Same wording as
+    /// `SandboxesModel`'s `.toolNotFound` toast so both surfaces agree.
+    public var sbxBanner: String? {
+        sbxAvailable == false ? "sbx not found — set its location in Settings." : nil
     }
 
     /// The only mutation path for `config` — `AppModel` is single-owner of
