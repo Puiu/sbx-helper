@@ -27,17 +27,12 @@ struct PolicyListView: View {
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.muted)
 
-            ForEach(sandboxes.policyRules) { rule in
-                PolicyRowView(rule: rule, isBusy: sandboxes.isPolicyBusy) {
-                    Task { await sandboxes.removePolicy(rule) }
-                }
-            }
-
             HStack(spacing: 6) {
-                Picker("Decision", selection: $sandboxes.policyDecision) {
+                Picker("", selection: $sandboxes.policyDecision) {
                     Text("Allow").tag(Decision.allow)
                     Text("Deny").tag(Decision.deny)
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 140)
 
@@ -51,6 +46,12 @@ struct PolicyListView: View {
 
                 Button("Add") { Task { await sandboxes.addPolicy() } }
                     .disabled(sandboxes.isPolicyBusy)
+            }
+
+            ForEach(sandboxes.policyRules) { rule in
+                PolicyRowView(rule: rule, isBusy: sandboxes.isPolicyBusy) {
+                    Task { await sandboxes.removePolicy(rule) }
+                }
             }
 
             if let error = sandboxes.policyError {
