@@ -1,3 +1,20 @@
+## Secrets setup (one-time per host)
+
+API keys for new sandboxes live in `.env` (gitignored, never committed).
+`.env.example` is the committed template.
+
+```console
+$ cp .env.example .env   # fill in real values
+$ ./setup-secrets.sh
+```
+
+This stores `CONTEXT7_API_KEY`, `AZURE_DEVOPS_PAT`, and `OPENCODE_API_KEY`
+in sbx's secret store and opens the matching network policy. Recreate
+existing sandboxes (`sbx rm` + `sbx run`) after adding secrets. Per-key
+details (hosts, fallback tiers, troubleshooting) are in the sections below.
+
+---
+
 Save the Dockerfile above as Dockerfile in an empty folder (plus statusline.sh if you're using it), and cd into that folder.
 
 Build the image locally:
