@@ -66,7 +66,7 @@ allow_network "opencode.ai:443" "OPENCODE_API_KEY" "${OPENCODE_API_KEY:-}"
 set_secret "github.com" "GITHUB_PAT" "${GITHUB_PAT:-}"
 allow_network "github.com:443" "GITHUB_PAT" "${GITHUB_PAT:-}"
 
-set_secret "api.anthropic.com" "CLAUDE_API_KEY" "${CLAUDE_API_KEY:-}"
-allow_network "api.anthropic.com:443" "CLAUDE_API_KEY" "${CLAUDE_API_KEY:-}"
+set_secret "api.anthropic.com" "CLAUDE_CODE_OAUTH_TOKEN" "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+allow_network "api.anthropic.com:443" "CLAUDE_CODE_OAUTH_TOKEN" "${CLAUDE_CODE_OAUTH_TOKEN:-}"
 
 echo "Done. Recreate existing sandboxes (sbx rm + sbx run) to pick up new secrets."
