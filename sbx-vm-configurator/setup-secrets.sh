@@ -63,4 +63,10 @@ set_secret "dev.azure.com" "AZURE_DEVOPS_PAT" "${AZURE_DEVOPS_PAT:-}"
 set_secret "opencode.ai" "OPENCODE_API_KEY" "${OPENCODE_API_KEY:-}"
 allow_network "opencode.ai:443" "OPENCODE_API_KEY" "${OPENCODE_API_KEY:-}"
 
+set_secret "github.com" "GITHUB_PAT" "${GITHUB_PAT:-}"
+allow_network "github.com:443" "GITHUB_PAT" "${GITHUB_PAT:-}"
+
+set_secret "api.anthropic.com" "CLAUDE_API_KEY" "${CLAUDE_API_KEY:-}"
+allow_network "api.anthropic.com:443" "CLAUDE_API_KEY" "${CLAUDE_API_KEY:-}"
+
 echo "Done. Recreate existing sandboxes (sbx rm + sbx run) to pick up new secrets."
