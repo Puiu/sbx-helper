@@ -8,10 +8,21 @@ $ cp .env.example .env   # fill in real values
 $ ./setup-secrets.sh
 ```
 
-This stores `CONTEXT7_API_KEY`, `AZURE_DEVOPS_PAT`, and `OPENCODE_API_KEY`
-in sbx's secret store and opens the matching network policy. Recreate
-existing sandboxes (`sbx rm` + `sbx run`) after adding secrets. Per-key
-details (hosts, fallback tiers, troubleshooting) are in the sections below.
+This stores `CONTEXT7_API_KEY`, `AZURE_DEVOPS_PAT`, `OPENCODE_API_KEY`,
+`GITHUB_PAT`, and `CLAUDE_CODE_OAUTH_TOKEN` in sbx's secret store and opens the
+matching network policy. `GITHUB_PAT` is stored twice: as a custom secret
+(env var for tools that read it directly) and as the built-in `github`
+**service** secret, which is what lets the sbx proxy authenticate git-over-HTTPS
+traffic — the custom secret alone does not cover git, since git sends no auth
+header for the proxy to rewrite. Recreate existing sandboxes (`sbx rm` +
+`sbx run`) after adding secrets. Per-key details (hosts, fallback tiers,
+troubleshooting) are in the sections below.
+
+- Troubleshoot: `could not read Username for 'https://github.com'` inside a
+  sandbox → the `github` **service** secret is missing (`sbx secret ls` shows
+  no `service github` row). A custom secret on host `github.com` is not
+  enough: git sends no auth header for the proxy to rewrite. Re-run
+  `./setup-secrets.sh`, then recreate the sandbox.
 
 ---
 

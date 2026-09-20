@@ -51,6 +51,20 @@ allow_network() {
   sbx policy allow network "${rule}"
 }
 
+# Service secrets are the built-in sbx path: the proxy authenticates requests
+# (including git over HTTPS) on the sandbox's behalf. Distinct from set_secret
+# above, which only injects a placeholder env var and rewrites request headers —
+# git sends no auth header, so a custom secret alone cannot authenticate a clone.
+set_service_secret() {
+  local service="$1" value="$2"
+  if [[ -z "${value}" ]]; then
+    echo "Skipping ${service} service secret (empty/unset in ${ENV_FILE})."
+    return 0
+  fi
+  echo "Setting ${service} service secret..."
+  sbx secret set "${service}" --token "${value}" --force
+}
+
 set_secret "mcp.context7.com" "CONTEXT7_API_KEY" "${CONTEXT7_API_KEY:-}"
 allow_network "mcp.context7.com:443" "CONTEXT7_API_KEY" "${CONTEXT7_API_KEY:-}"
 
@@ -63,6 +77,7 @@ set_secret "dev.azure.com" "AZURE_DEVOPS_PAT" "${AZURE_DEVOPS_PAT:-}"
 set_secret "opencode.ai" "OPENCODE_API_KEY" "${OPENCODE_API_KEY:-}"
 allow_network "opencode.ai:443" "OPENCODE_API_KEY" "${OPENCODE_API_KEY:-}"
 
+set_service_secret "github" "${GITHUB_PAT:-}"
 set_secret "github.com" "GITHUB_PAT" "${GITHUB_PAT:-}"
 allow_network "github.com:443" "GITHUB_PAT" "${GITHUB_PAT:-}"
 
