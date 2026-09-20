@@ -9,8 +9,8 @@ $ ./setup-secrets.sh     # requires jq
 ```
 
 This stores `CONTEXT7_API_KEY`, `AZURE_DEVOPS_PAT`, `OPENCODE_API_KEY`,
-`GITHUB_PAT`, and `CLAUDE_CODE_OAUTH_TOKEN` in sbx's secret store and opens the
-matching network policy. `GITHUB_PAT` is stored twice: as a custom secret
+`GITHUB_PAT`, `CLAUDE_CODE_OAUTH_TOKEN`, and `JEV_API_KEY` in sbx's secret
+store and opens the matching network policy. `GITHUB_PAT` is stored twice: as a custom secret
 (env var for tools that read it directly) and as the built-in `github`
 **service** secret, which is what lets the sbx proxy authenticate git-over-HTTPS
 traffic — the custom secret alone does not cover git, since git sends no auth
@@ -120,6 +120,61 @@ Context7 releases. Note `claude/dotnet/build-sandbox.sh` builds from the
 `sbx-vm-configurator/` root as context (that is where
 `statusline-command.sh` lives).
 
+### Jev decision support (Claude template `v7+`)
+
+The image also ships [Jev](https://www.jevai.org/agent), a decision-support
+service for coding agents: a remote MCP server (six `jev_*` tools — task
+routing, model routing, tool-call guarding, research/claim checking, and
+completion review) plus six Skills that tell Claude when to call each tool.
+
+It's wired differently from superpowers/Context7 because of two constraints:
+
+- The six `SKILL.md` files are installed at build time into
+  `/etc/claude-code/.claude/skills/` (the enterprise tier), not
+  `~/.claude/skills/` — same reasoning as the managed-settings statusline
+  above: this location is untouched by sbx's per-sandbox rewrites. Upstream
+  ships them without frontmatter, so a `name`/`description` block is
+  prepended to each so Claude auto-triggers them correctly; bodies are
+  otherwise verbatim.
+- The MCP server is registered at user scope with the header
+  `Authorization: Bearer ${JEV_API_KEY}`, literally — Claude Code expands
+  `${VAR}` references in user/project-scope MCP config at session start, so
+  the real key never enters the image. (It can't live in managed-settings.json's
+  `managedMcpServers`, which rejects `${VAR}` and would bake in the literal
+  key, and it can't go in `/etc/claude-code/managed-mcp.json`, which takes
+  exclusive control of MCP and would suppress the Context7 server above.)
+
+Like `CONTEXT7_API_KEY`, the key is injected at sandbox runtime for a single
+host and needs its network policy opened. `./setup-secrets.sh` at the repo
+root handles both from `.env`'s `JEV_API_KEY`; to do it by hand:
+
+```console
+$ export JEV_API_KEY="<paste-your-key>"   # host only, never commit it
+$ sbx secret set-custom \
+    --host www.jevai.org \
+    --env JEV_API_KEY \
+    --value "$JEV_API_KEY"
+$ sbx policy allow network www.jevai.org:443
+```
+
+Recreate existing sandboxes after adding the secret. Verify inside a sandbox:
+
+```console
+$ claude mcp list          # `jev` should show as connected, not failed
+$ claude mcp get jev       # confirm the header name only, no key value
+```
+
+`claude mcp list` failing with a `401` means the secret isn't bound to host
+`www.jevai.org`; a timeout means the network policy above wasn't opened. If
+`jev` is missing entirely after a sandbox recreate (rather than merely
+disconnected), sbx is rewriting `~/.claude.json` the same way it rewrites
+`~/.claude/settings.json` — re-add it by hand as a stopgap:
+
+```console
+$ claude mcp add --transport http jev --scope user https://www.jevai.org/mcp \
+    --header 'Authorization: Bearer ${JEV_API_KEY}'
+```
+
 ---
 
 ## OpenCode (.NET 10 template: `opencode/dotnet/`)
@@ -224,14 +279,14 @@ image's `/etc/os-release` codename: it only runs if the base isn't already
 noble, since the Claude base wasn't verified to be resolute the way
 `opencode-docker` is.
 
-Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v1`):
+Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v2`):
 
 ```console
 $ cd claude/dotnet-and-swift
-$ docker build -f Dockerfile -t claude-sbx-dotnet-and-swift:v1 ../..
-$ docker image save claude-sbx-dotnet-and-swift:v1 -o claude-sbx-dotnet-and-swift-v1.tar
-$ sbx template load claude-sbx-dotnet-and-swift-v1.tar
-$ sbx run --template claude-sbx-dotnet-and-swift:v1 claude ~/my-project
+$ docker build -f Dockerfile -t claude-sbx-dotnet-and-swift:v2 ../..
+$ docker image save claude-sbx-dotnet-and-swift:v2 -o claude-sbx-dotnet-and-swift-v2.tar
+$ sbx template load claude-sbx-dotnet-and-swift-v2.tar
+$ sbx run --template claude-sbx-dotnet-and-swift:v2 claude ~/my-project
 ```
 
 Verify inside the sandbox:
@@ -242,9 +297,10 @@ $ swift --version    # 6.x
 $ docker info        # daemon present (start-docker label)
 ```
 
-Preinstalled skills (superpowers + Context7) and the statusline work exactly
-as described in the Claude `claude/dotnet/` sections above — same managed
-`/etc/claude-code/managed-settings.json` mechanism, same secret setup steps.
+Preinstalled skills (superpowers + Context7 + Jev) and the statusline work
+exactly as described in the Claude `claude/dotnet/` sections above — same
+managed `/etc/claude-code/managed-settings.json` mechanism, same secret
+setup steps.
 
 ---
 

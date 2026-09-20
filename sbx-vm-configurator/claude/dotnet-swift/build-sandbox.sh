@@ -9,7 +9,7 @@
 #
 # Config (override via env var):
 #   IMAGE_NAME  (default: claude-sbx-dotnet-and-swift)
-#   IMAGE_TAG   (default: v1)  -- bump this each time you rebuild
+#   IMAGE_TAG   (default: v2)  -- bump this each time you rebuild
 #
 set -euo pipefail
 
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTEXT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"  # statusline-command.sh lives at the sbx-vm-configurator root
 
 IMAGE_NAME="${IMAGE_NAME:-claude-sbx-dotnet-and-swift}"
-IMAGE_TAG="${IMAGE_TAG:-v1}"
+IMAGE_TAG="${IMAGE_TAG:-v2}"
 FULL_TAG="${IMAGE_NAME}:${IMAGE_TAG}"
 TAR_FILE="${SCRIPT_DIR}/${IMAGE_NAME}-${IMAGE_TAG}.tar"
 WORKSPACE="${1:-$PWD}"

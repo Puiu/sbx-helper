@@ -34,6 +34,32 @@ RUN mkdir -p /etc/claude-code \
         '    "context7@context7-marketplace": true' \
         '  }' \
         '}' > /etc/claude-code/managed-settings.json
+
+# JEV decision-support skills (https://www.jevai.org/agent). The vendor snippet installs to
+# .agents/skills/, which Claude Code does not read; the enterprise skills dir under the managed
+# settings directory is the equivalent tier and, like managed-settings.json above, is untouched
+# by sbx so it survives sandbox (re)creates.
+# Upstream SKILL.md files ship without YAML frontmatter, which would leave the auto-trigger text
+# as the bare H1 heading — a name/description block is prepended per skill; bodies stay verbatim.
+RUN set -eu; \
+    install_jev_skill() { \
+      dir="/etc/claude-code/.claude/skills/$1"; \
+      mkdir -p "$dir"; \
+      { printf '%s\n' '---' "name: $1" "description: $2" '---' ''; \
+        curl -fsSL "https://www.jevai.org/skills/$1/SKILL.md"; } > "$dir/SKILL.md"; \
+    }; \
+    install_jev_skill jev \
+      "Router for the Jev decision tools. Use at a real decision boundary where explicit options and calibrated probabilities beat generated prose; selects which jev_* MCP tool applies."; \
+    install_jev_skill jev-task-router \
+      "Use before committing to an execution path that has meaningful ambiguity or risk, to choose proceed_fast, deep_review, split_task, or block."; \
+    install_jev_skill jev-model-router \
+      "Use when more than one available model could do the task and the choice materially affects quality, cost, latency, context, or tool support."; \
+    install_jev_skill jev-tool-guard \
+      "Use immediately before a consequential tool call that mutates external state, spends money, exposes data, publishes, deploys, changes permissions, or is hard to reverse."; \
+    install_jev_skill jev-research-guard \
+      "Use after collecting evidence and before presenting a material claim as established, to check whether the evidence actually supports it."; \
+    install_jev_skill jev-completion-review \
+      "Use immediately before declaring a non-trivial objective complete, to compare objective, completed work, verification run, and known gaps."
 USER agent
 
 COPY --chown=agent:agent statusline-command.sh /home/agent/.local/bin/statusline-command.sh
@@ -68,6 +94,15 @@ RUN command -v claude >/dev/null \
         && claude plugin install "context7@context7-marketplace" -s user \
         || echo "WARNING: plugin pre-install failed; install missing plugins manually in the sandbox instead."; } \
     || { echo "ERROR: claude binary missing from base image."; exit 1; }
+
+# Register the Jev MCP server (https://www.jevai.org/agent) at user scope. It cannot go in
+# managed-settings.json's managedMcpServers (that key rejects ${VAR}, so the real key would be
+# baked into the image) and must not go in /etc/claude-code/managed-mcp.json (that file takes
+# exclusive control of MCP and would suppress the context7 plugin's server above). ${JEV_API_KEY}
+# below is single-quoted so it is stored literally and expands inside the sandbox, where sbx
+# injects the placeholder and the proxy swaps in the real key for host www.jevai.org.
+RUN claude mcp add --transport http jev --scope user https://www.jevai.org/mcp \
+      --header 'Authorization: Bearer ${JEV_API_KEY}'
 
 # sandboxd starts a Docker daemon inside the sandbox when this label is set.
 # Inherited from the claude-code-docker base; re-declared so the requirement is explicit.

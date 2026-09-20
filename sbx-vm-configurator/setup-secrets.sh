@@ -106,6 +106,9 @@ set_service_secret() {
 set_secret "CONTEXT7_API_KEY" "${CONTEXT7_API_KEY:-}" "mcp.context7.com"
 allow_network "mcp.context7.com:443" "CONTEXT7_API_KEY" "${CONTEXT7_API_KEY:-}"
 
+set_secret "JEV_API_KEY" "${JEV_API_KEY:-}" "www.jevai.org"
+allow_network "www.jevai.org:443" "JEV_API_KEY" "${JEV_API_KEY:-}"
+
 set_secret "AZURE_DEVOPS_PAT" "${AZURE_DEVOPS_PAT:-}" "dev.azure.com" "pkgs.dev.azure.com"
 # NOTE: no `sbx policy allow` for dev.azure.com/pkgs.dev.azure.com here — the
 # PAT is sent to assorted AzDO hosts (dev.azure.com, *.visualstudio.com, nuget
