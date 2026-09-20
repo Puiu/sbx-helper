@@ -7,7 +7,7 @@
 #   ./build-sandbox.sh [workspace-path]
 #
 # Config (override via env var):
-#   IMAGE_NAME  (default: opencode-sbx-fordel)
+#   IMAGE_NAME  (default: opencode-sbx-dotnet-and-swift)
 #   IMAGE_TAG   (default: v1)  -- bump this each time you rebuild
 #
 # Zen API key: NOT baked into the image. Supply it at runtime via
@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTEXT_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"  # statusline-command.sh lives at the sbx-vm-configurator root
 
-IMAGE_NAME="${IMAGE_NAME:-opencode-sbx-fordel}"
+IMAGE_NAME="${IMAGE_NAME:-opencode-sbx-dotnet-and-swift}"
 IMAGE_TAG="${IMAGE_TAG:-v1}"
 FULL_TAG="${IMAGE_NAME}:${IMAGE_TAG}"
 TAR_FILE="${SCRIPT_DIR}/${IMAGE_NAME}-${IMAGE_TAG}.tar"

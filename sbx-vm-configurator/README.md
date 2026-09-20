@@ -208,7 +208,7 @@ you pick up new superpowers releases (the pre-warm clones latest `main`).
 
 ---
 
-## Claude (.NET 10 + Swift 6 template: `claude/fordel/`)
+## Claude (.NET 10 + Swift 6 template: `claude/dotnet-and-swift/`)
 
 Combines the Claude .NET 10 template (`claude/dotnet/`) and the OpenCode Swift 6
 template (`opencode/swift/`) into one image: same Claude base
@@ -227,11 +227,11 @@ noble, since the Claude base wasn't verified to be resolute the way
 Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v1`):
 
 ```console
-$ cd claude/fordel
-$ docker build -f Dockerfile -t claude-sbx-fordel:v1 ../..
-$ docker image save claude-sbx-fordel:v1 -o claude-sbx-fordel-v1.tar
-$ sbx template load claude-sbx-fordel-v1.tar
-$ sbx run --template claude-sbx-fordel:v1 claude ~/my-project
+$ cd claude/dotnet-and-swift
+$ docker build -f Dockerfile -t claude-sbx-dotnet-and-swift:v1 ../..
+$ docker image save claude-sbx-dotnet-and-swift:v1 -o claude-sbx-dotnet-and-swift-v1.tar
+$ sbx template load claude-sbx-dotnet-and-swift-v1.tar
+$ sbx run --template claude-sbx-dotnet-and-swift:v1 claude ~/my-project
 ```
 
 Verify inside the sandbox:
@@ -248,7 +248,7 @@ as described in the Claude `claude/dotnet/` sections above — same managed
 
 ---
 
-## OpenCode (.NET 10 + Swift 6 template: `opencode/fordel/`)
+## OpenCode (.NET 10 + Swift 6 template: `opencode/dotnet-and-swift/`)
 
 Combines the OpenCode .NET 10 template (`opencode/dotnet/`) and the OpenCode
 Swift 6 template (`opencode/swift/`) into one image: same OpenCode base
@@ -259,7 +259,7 @@ managed config, statusline, and .NET 10 SDK + global tools as
 Use this when a project needs both toolchains in the same sandbox instead of
 switching templates.
 
-Unlike `claude/fordel/`, the noble-compat apt shim here is copied verbatim
+Unlike `claude/dotnet-and-swift/`, the noble-compat apt shim here is copied verbatim
 and unguarded — `opencode-docker` is the exact base `opencode/swift/` already
 targets and verified (2026-09) as Ubuntu 26.04 (resolute), so there is no
 codename uncertainty to guard against.
@@ -267,11 +267,11 @@ codename uncertainty to guard against.
 Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v1`):
 
 ```console
-$ cd opencode/fordel
-$ docker build -f Dockerfile -t opencode-sbx-fordel:v1 ../..
-$ docker image save opencode-sbx-fordel:v1 -o opencode-sbx-fordel-v1.tar
-$ sbx template load opencode-sbx-fordel-v1.tar
-$ sbx run --template opencode-sbx-fordel:v1 opencode ~/my-project
+$ cd opencode/dotnet-and-swift
+$ docker build -f Dockerfile -t opencode-sbx-dotnet-and-swift:v1 ../..
+$ docker image save opencode-sbx-dotnet-and-swift:v1 -o opencode-sbx-dotnet-and-swift-v1.tar
+$ sbx template load opencode-sbx-dotnet-and-swift-v1.tar
+$ sbx run --template opencode-sbx-dotnet-and-swift:v1 opencode ~/my-project
 ```
 
 Verify inside the sandbox:
