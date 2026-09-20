@@ -200,3 +200,84 @@ Adding more plugins: extend the `"plugin"` array in
 `opencode plugin "<spec>" -g` pre-warm line, rebuild with a new tag, and
 reload via `sbx template load`. Rebuilding with a bumped tag is also how
 you pick up new superpowers releases (the pre-warm clones latest `main`).
+
+---
+
+## Claude (.NET 10 + Swift 6 template: `claude/fordel/`)
+
+Combines the Claude .NET 10 template (`claude/dotnet/`) and the OpenCode Swift 6
+template (`opencode/swift/`) into one image: same Claude base
+(`docker/sandbox-templates:claude-code-docker`, run with `sbx run claude`),
+managed settings, statusline, and .NET 10 SDK + global tools as
+`claude/dotnet/`, plus the Swift 6 toolchain (via `swiftly`, pinned to
+`--platform ubuntu24.04`) and its noble compat libs from `opencode/swift/`.
+Use this when a project needs both toolchains in the same sandbox instead of
+switching templates.
+
+The noble-compat apt shim from `opencode/swift/` is guarded by the base
+image's `/etc/os-release` codename: it only runs if the base isn't already
+noble, since the Claude base wasn't verified to be resolute the way
+`opencode-docker` is.
+
+Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v1`):
+
+```console
+$ cd claude/fordel
+$ docker build -f Dockerfile -t claude-sbx-fordel:v1 ../..
+$ docker image save claude-sbx-fordel:v1 -o claude-sbx-fordel-v1.tar
+$ sbx template load claude-sbx-fordel-v1.tar
+$ sbx run --template claude-sbx-fordel:v1 claude ~/my-project
+```
+
+Verify inside the sandbox:
+
+```console
+$ dotnet --version   # 10.x
+$ swift --version    # 6.x
+$ docker info        # daemon present (start-docker label)
+```
+
+Preinstalled skills (superpowers + Context7) and the statusline work exactly
+as described in the Claude `claude/dotnet/` sections above — same managed
+`/etc/claude-code/managed-settings.json` mechanism, same secret setup steps.
+
+---
+
+## OpenCode (.NET 10 + Swift 6 template: `opencode/fordel/`)
+
+Combines the OpenCode .NET 10 template (`opencode/dotnet/`) and the OpenCode
+Swift 6 template (`opencode/swift/`) into one image: same OpenCode base
+(`docker/sandbox-templates:opencode-docker`, run with `sbx run opencode`),
+managed config, statusline, and .NET 10 SDK + global tools as
+`opencode/dotnet/`, plus the Swift 6 toolchain (via `swiftly`, pinned to
+`--platform ubuntu24.04`) and its noble compat libs from `opencode/swift/`.
+Use this when a project needs both toolchains in the same sandbox instead of
+switching templates.
+
+Unlike `claude/fordel/`, the noble-compat apt shim here is copied verbatim
+and unguarded — `opencode-docker` is the exact base `opencode/swift/` already
+targets and verified (2026-09) as Ubuntu 26.04 (resolute), so there is no
+codename uncertainty to guard against.
+
+Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v1`):
+
+```console
+$ cd opencode/fordel
+$ docker build -f Dockerfile -t opencode-sbx-fordel:v1 ../..
+$ docker image save opencode-sbx-fordel:v1 -o opencode-sbx-fordel-v1.tar
+$ sbx template load opencode-sbx-fordel-v1.tar
+$ sbx run --template opencode-sbx-fordel:v1 opencode ~/my-project
+```
+
+Verify inside the sandbox:
+
+```console
+$ dotnet --version   # 10.x
+$ swift --version    # 6.x
+$ docker info        # daemon present (start-docker label)
+```
+
+Supplying the Zen API key, preinstalled skills (superpowers + Context7), and
+the managed-config mechanism all work exactly as described in the OpenCode
+`opencode/dotnet/` sections above — same `/etc/opencode/opencode.json`,
+same secret setup steps.
