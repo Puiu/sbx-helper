@@ -79,7 +79,10 @@ RUN curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
 # libgcc-13-dev libpython3-dev libstdc++-13-dev) are present. swiftly is
 # version-pinned for reproducible builds; the toolchain itself floats to
 # latest stable 6.x — rebuild with a new tag to pick up releases.
-ARG SWIFTLY_VERSION=1.1.2
+# swiftly must be >= 1.1.4: earlier versions drop the patch component when
+# building the download URL (requesting swift-6.4-RELEASE), which 404s against
+# Swift 6.4.0's swift-6.4.0-RELEASE naming (swiftlang/swiftly#592).
+ARG SWIFTLY_VERSION=1.1.4
 RUN curl -sSL "https://download.swift.org/swiftly/linux/swiftly-${SWIFTLY_VERSION}-$(uname -m).tar.gz" -o /tmp/swiftly.tar.gz \
     && tar -zxf /tmp/swiftly.tar.gz -C /tmp \
     && /tmp/swiftly init --platform ubuntu24.04 --assume-yes --quiet-shell-followup \

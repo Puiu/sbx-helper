@@ -5,7 +5,7 @@ API keys for new sandboxes live in `.env` (gitignored, never committed).
 
 ```console
 $ cp .env.example .env   # fill in real values
-$ ./setup-secrets.sh
+$ ./setup-secrets.sh     # requires jq
 ```
 
 This stores `CONTEXT7_API_KEY`, `AZURE_DEVOPS_PAT`, `OPENCODE_API_KEY`,
@@ -17,6 +17,11 @@ traffic — the custom secret alone does not cover git, since git sends no auth
 header for the proxy to rewrite. Recreate existing sandboxes (`sbx rm` +
 `sbx run`) after adding secrets. Per-key details (hosts, fallback tiers,
 troubleshooting) are in the sections below.
+
+The script is safe to re-run after editing `.env`: existing custom secrets are
+updated in place (their placeholder is preserved, so sandboxes already holding
+the old placeholder keep working — only the real secret behind it changes) and
+`jq` is required to detect them.
 
 - Troubleshoot: `could not read Username for 'https://github.com'` inside a
   sandbox → the `github` **service** secret is missing (`sbx secret ls` shows

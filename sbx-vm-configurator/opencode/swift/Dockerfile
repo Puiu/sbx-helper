@@ -61,13 +61,16 @@ RUN chmod +x /home/agent/.local/bin/statusline-command.sh
 # yet, so the platform is pinned to ubuntu24.04: the noble toolchain runs fine
 # on resolute once the apt deps above (incl. swiftly's own recommendation of
 # libgcc-13-dev libpython3-dev libstdc++-13-dev) are present. Verified 2026-09:
-# `swiftly init` pulls Swift 6.3.3 and `swift --version` works in the image.
+# `swiftly init` pulls Swift 6.4.0 and `swift --version` works in the image.
 # swiftly is version-pinned for reproducible builds; the toolchain itself
 # floats to latest stable 6.x — rebuild with a new tag to pick up releases.
 # Default SWIFTLY_HOME_DIR (~/.local/share/swiftly) is kept; its `bin`
 # subdir holds the `swift`/`swiftc`/`sourcekit-lsp`/… shims (see the PATH
 # entry below alongside ~/.local/bin, home of statusline-command.sh).
-ARG SWIFTLY_VERSION=1.1.2
+# swiftly must be >= 1.1.4: earlier versions drop the patch component when
+# building the download URL (requesting swift-6.4-RELEASE), which 404s against
+# Swift 6.4.0's swift-6.4.0-RELEASE naming (swiftlang/swiftly#592).
+ARG SWIFTLY_VERSION=1.1.4
 RUN curl -sSL "https://download.swift.org/swiftly/linux/swiftly-${SWIFTLY_VERSION}-$(uname -m).tar.gz" -o /tmp/swiftly.tar.gz \
     && tar -zxf /tmp/swiftly.tar.gz -C /tmp \
     && /tmp/swiftly init --platform ubuntu24.04 --assume-yes --quiet-shell-followup \
