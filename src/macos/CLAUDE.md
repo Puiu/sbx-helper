@@ -64,6 +64,10 @@ FROZEN — parity reference only, do not modify. Rationale/history:
   `requireKnownSandbox` fresh on every mutating call (`sbx policy ls
   <bogus>` exits 0 with global rules); `removable` re-check before
   `policy rm`, always pass `--sandbox <name>`.
+- `package_app.sh` finds products via `swift build --show-bin-path`; never
+  hardcode `.build/<arch>-apple-macosx/…`. Swift 6.4's default swiftbuild
+  system writes to `.build/out/Products/<Conf>`, and the old hardcoded path
+  silently shipped a stale binary (new views "missing" from the app).
 - Views: `List` over flattened `visibleRows` (not `OutlineGroup`);
   `HSplitView` for peer panes (not `NavigationSplitView`); sheets owned
   locally (`.sheet(isPresented:)`), delete confirm via `.alert`; toasts

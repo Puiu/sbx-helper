@@ -27,8 +27,20 @@ if [[ ${#ARCH_LIST[@]} -eq 0 ]]; then
   ARCH_LIST=("$HOST_ARCH")
 fi
 
+# Ask SwiftPM where products landed instead of hardcoding a layout: the
+# default swiftbuild system writes to .build/out/Products/<Conf> (shared by
+# every arch), while the native system used .build/<arch>-apple-macosx/<conf>.
+# A hardcoded path silently shipped a stale binary. Each arch's binary is
+# copied to staging right after its build, before the next arch overwrites it.
+STAGING="$ROOT/.build/package-staging"
+rm -rf "$STAGING"
+PRIMARY_BIN_DIR=""
 for ARCH in "${ARCH_LIST[@]}"; do
   swift build -c "$CONF" --arch "$ARCH"
+  BIN_DIR=$(swift build -c "$CONF" --arch "$ARCH" --show-bin-path)
+  [[ -n "$PRIMARY_BIN_DIR" ]] || PRIMARY_BIN_DIR="$BIN_DIR"
+  mkdir -p "$STAGING/$ARCH"
+  cp "$BIN_DIR/$APP_NAME" "$STAGING/$ARCH/$APP_NAME"
 done
 
 APP="$ROOT/${APP_NAME}.app"
@@ -81,10 +93,7 @@ PLIST
 build_product_path() {
   local name="$1"
   local arch="$2"
-  case "$arch" in
-    arm64|x86_64) echo ".build/${arch}-apple-macosx/$CONF/$name" ;;
-    *) echo ".build/$CONF/$name" ;;
-  esac
+  echo "$STAGING/$arch/$name"
 }
 
 verify_binary_arches() {
@@ -138,7 +147,7 @@ if [[ -d "$APP_RESOURCES_DIR" ]]; then
 fi
 
 # SwiftPM resource bundles are emitted next to the built binary.
-PREFERRED_BUILD_DIR="$(dirname "$(build_product_path "$APP_NAME" "${ARCH_LIST[0]}")")"
+PREFERRED_BUILD_DIR="$PRIMARY_BIN_DIR"
 shopt -s nullglob
 SWIFTPM_BUNDLES=("${PREFERRED_BUILD_DIR}/"*.bundle)
 shopt -u nullglob
@@ -149,7 +158,7 @@ if [[ ${#SWIFTPM_BUNDLES[@]} -gt 0 ]]; then
 fi
 
 # Embed frameworks if any exist in the build folder.
-FRAMEWORK_DIRS=(".build/$CONF" ".build/${ARCH_LIST[0]}-apple-macosx/$CONF")
+FRAMEWORK_DIRS=("$PRIMARY_BIN_DIR")
 for dir in "${FRAMEWORK_DIRS[@]}"; do
   if compgen -G "${dir}/*.framework" >/dev/null; then
     cp -R "${dir}/"*.framework "$APP/Contents/Frameworks/"

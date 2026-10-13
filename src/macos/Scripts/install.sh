@@ -47,6 +47,14 @@ cp -R "$BUILD_PATH" "$INSTALL_PATH"
 # with the Gatekeeper note in README.md.
 xattr -cr "$INSTALL_PATH" 2>/dev/null || true
 
+# Remove the staging bundle so Spotlight/LaunchServices don't see two apps
+# with the same bundle id (repo copy + installed copy). Skip when INSTALL_PATH
+# points at the staging bundle itself (dry-run verification override).
+STAGING_ABS="$(cd "$(dirname "$BUILD_PATH")" && pwd)/$(basename "$BUILD_PATH")"
+if [ "${INSTALL_PATH%/}" != "${STAGING_ABS%/}" ]; then
+  rm -rf "$BUILD_PATH"
+fi
+
 if [ "${SKIP_LAUNCH:-0}" != "1" ]; then
   echo "==> Launching ${INSTALL_PATH}"
   open "$INSTALL_PATH"
