@@ -4,7 +4,7 @@ import SbxKit
 import SbxServices
 
 /// Live "sbx commands" debug section for the Sandboxes tab — every `sbx`
-/// spawn the tab issues (command, exit status, stdout/stderr), newest-last.
+/// spawn the tab issues (command, exit status, stdout/stderr), newest-first.
 /// Collapsed by default so it never steals list space; the log refreshes
 /// after every model operation, including failed ones, so a parse failure
 /// still shows the exact response that failed to parse.
@@ -15,8 +15,27 @@ struct SandboxDebugLogView: View {
     var body: some View {
         let sandboxes = environmentSandboxes
 
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 8) {
+        // Hand-rolled disclosure instead of `DisclosureGroup`: the latter
+        // sizes its content to its ideal height, so inside a short
+        // `VSplitView` pane the body overflowed and was centered, pushing
+        // the header and the top of the log out of view. A plain VStack
+        // pins the header on top and gives the log exactly the remainder.
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                expanded.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 10)
+                    Text("sbx commands (\(sandboxes.debugLog.count))")
+                        .font(.system(size: 11.5))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
                 Button("Reload sandboxes") { Task { await sandboxes.fetch() } }
 
                 // Scrolls inside the `VSplitView` allocation from
@@ -29,7 +48,7 @@ struct SandboxDebugLogView: View {
                                 .font(.system(size: 11.5))
                                 .foregroundStyle(Theme.muted)
                         } else {
-                            ForEach(sandboxes.debugLog) { entry in
+                            ForEach(sandboxes.debugLog.reversed()) { entry in
                                 entryView(entry)
                             }
                         }
@@ -40,13 +59,10 @@ struct SandboxDebugLogView: View {
                     // the outer half of a centered stroke.
                     .padding(.vertical, 2)
                 }
-                .frame(minHeight: 60, maxHeight: .infinity)
+                .frame(maxHeight: .infinity)
             }
-            .padding(.top, 4)
-        } label: {
-            Text("sbx commands (\(sandboxes.debugLog.count))")
-                .font(.system(size: 11.5))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func entryView(_ entry: SbxInvocation) -> some View {
