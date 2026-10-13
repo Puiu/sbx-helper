@@ -44,6 +44,15 @@ struct SandboxesView: View {
                     }
                     .listStyle(.plain)
                 }
+
+                Divider()
+
+                // Live sbx command/response log — collapsed by default.
+                // Lives in the list pane (not the detail pane) so it stays
+                // visible when the list itself fails to load, which is
+                // exactly when its contents matter most.
+                SandboxDebugLogView()
+                    .padding(8)
             }
             .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
 

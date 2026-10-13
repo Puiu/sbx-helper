@@ -85,6 +85,36 @@ struct ParseSandboxLsTests {
         let sandboxes = try parseSandboxLs(stdout)
         #expect(sandboxes.map(\.name) == ["good", "also-good"])
     }
+
+    @Test("parses a top-level array from sbx ls --json")
+    func parsesTopLevelArray() throws {
+        let stdout = """
+        [
+          {"name":"good","id":"1","agent":"claude","status":"running","workspaces":[]},
+          {"name":"also-good","id":"2","agent":"opencode","status":"stopped","workspaces":[]}
+        ]
+        """
+        let sandboxes = try parseSandboxLs(stdout)
+        #expect(sandboxes.map(\.name) == ["good", "also-good"])
+    }
+
+    @Test("a malformed entry in a top-level array is dropped, the rest survive")
+    func dropsMalformedEntryInTopLevelArray() throws {
+        let stdout = """
+        [
+          {"name":"good","id":"1","agent":"claude","status":"running","workspaces":[]},
+          "not-an-object",
+          {"name":"also-good","id":"2","agent":"claude","status":"stopped","workspaces":[]}
+        ]
+        """
+        let sandboxes = try parseSandboxLs(stdout)
+        #expect(sandboxes.map(\.name) == ["good", "also-good"])
+    }
+
+    @Test("an empty top-level array parses to no sandboxes")
+    func parsesEmptyTopLevelArray() throws {
+        #expect(try parseSandboxLs("[]") == [])
+    }
 }
 
 @Suite("parseNetworkRules")
@@ -181,5 +211,19 @@ struct ParseNetworkRulesTests {
         let rules = try parseNetworkRules(stdout: Self.sampleStdout, sandboxName: "my-sandbox")
         let scopedIDs = rules.filter(\.sandboxScoped).map(\.id)
         #expect(scopedIDs == ["a8ddb581-491b-406d-9b3b-40642d09ac1d", "user-added-rule-id"])
+    }
+
+    @Test("parses a top-level rules array from sbx policy ls --json")
+    func parsesTopLevelRulesArray() throws {
+        let stdout = """
+        [{"id":"user-added-rule-id","name":"user-added-rule-id","policy_id":"local-policy",
+          "scope":"sandbox:my-sandbox","applies_to":"sandbox:my-sandbox","resource_type":"network",
+          "decision":"deny","resources":["ads.example.com"],"origin":"local","layer":"local",
+          "status":"active","editable":true}]
+        """
+        let rules = try parseNetworkRules(stdout: stdout, sandboxName: "my-sandbox")
+        #expect(rules.count == 1)
+        #expect(rules[0].sandboxScoped == true)
+        #expect(rules[0].removable == true)
     }
 }

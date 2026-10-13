@@ -66,6 +66,16 @@ public protocol SandboxControlling: Sendable {
 
 extension SbxCLI: SandboxListing, SandboxControlling {}
 
+/// Read side of `SbxCLI`'s invocation log — the seam `SandboxesModel`
+/// snapshots into `debugLog` for the tab's live "sbx commands" section.
+/// Separate from `SandboxListing`/`SandboxControlling` so tests that don't
+/// care about the log keep constructing the model without one.
+public protocol SandboxDebugging: Sendable {
+    func recentInvocations() async -> [SbxInvocation]
+}
+
+extension SbxCLI: SandboxDebugging {}
+
 /// The policy slice of `SbxCLI` the Sandboxes tab drives — extracted so
 /// `SandboxesModel` (Phase 7) can be tested without a real `sbx` on PATH,
 /// the same reason `SandboxListing`/`SandboxControlling` exist. `SbxCLI`
@@ -82,6 +92,11 @@ public actor SbxCLI {
     private let commandRunner: CommandRunning
     private let toolLocator: ToolLocator
     private let timeout: Duration
+    /// Every spawned `sbx` invocation, newest-last and bounded (see
+    /// `SbxInvocationLog.maxEntries`) — surfaced via `recentInvocations`
+    /// for the Sandboxes tab's debug section.
+    private var invocationLog = SbxInvocationLog()
+    private var nextInvocationID: UInt64 = 0
 
     public init(commandRunner: CommandRunning, toolLocator: ToolLocator, timeout: Duration = .seconds(10)) {
         self.commandRunner = commandRunner
@@ -89,17 +104,37 @@ public actor SbxCLI {
         self.timeout = timeout
     }
 
+    /// Records one spawn (or attempted spawn) against the invocation log.
+    /// Truncation and the entry cap live in `SbxInvocationLog.append`.
+    private func record(command: String, result: CommandResult) {
+        invocationLog.append(SbxInvocation(
+            id: nextInvocationID, command: command, ok: result.ok,
+            exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr
+        ))
+        nextInvocationID += 1
+    }
+
+    /// Newest-last snapshot of recorded `sbx` invocations.
+    public func recentInvocations() -> [SbxInvocation] { invocationLog.entries }
+
     /// Spawns `argvWithSbxPrefix` (as built by SbxKit — element 0 is always
     /// the literal "sbx") against the resolved absolute `sbx` path. Drops
     /// that leading element before handing arguments to `CommandRunning`,
     /// which takes `executable:` separately.
     private func invoke(_ argvWithSbxPrefix: [String]) async -> Result<CommandResult, SbxCLIFailure> {
-        guard let sbxPath = await toolLocator.resolvedPath() else { return .failure(.toolNotFound) }
+        guard let sbxPath = await toolLocator.resolvedPath() else {
+            record(command: formatCommand(argvWithSbxPrefix), result: CommandResult(
+                ok: false, exitCode: nil, stdout: "",
+                stderr: "sbx not found — set its location in Settings."
+            ))
+            return .failure(.toolNotFound)
+        }
         let env = await toolLocator.childEnvironment()
         let result = await commandRunner.run(
             executable: sbxPath, arguments: Array(argvWithSbxPrefix.dropFirst()),
             stdin: nil, environment: env, timeout: timeout, maxOutputBytes: 1_000_000
         )
+        record(command: formatCommand(argvWithSbxPrefix), result: result)
         return .success(result)
     }
 
@@ -116,12 +151,19 @@ public actor SbxCLI {
     }
 
     public func listTemplates() async -> [String] {
-        guard let sbxPath = await toolLocator.resolvedPath() else { return [] }
+        guard let sbxPath = await toolLocator.resolvedPath() else {
+            record(command: "sbx template ls", result: CommandResult(
+                ok: false, exitCode: nil, stdout: "",
+                stderr: "sbx not found — set its location in Settings."
+            ))
+            return []
+        }
         let env = await toolLocator.childEnvironment()
         let result = await commandRunner.run(
             executable: sbxPath, arguments: ["template", "ls"],
             stdin: nil, environment: env, timeout: .seconds(5), maxOutputBytes: 1_000_000
         )
+        record(command: "sbx template ls", result: result)
         guard result.ok else { return [] }
         return parseTemplateLs(result.stdout)
     }

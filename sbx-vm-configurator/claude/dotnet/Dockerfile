@@ -35,6 +35,12 @@ RUN mkdir -p /etc/claude-code \
         '  }' \
         '}' > /etc/claude-code/managed-settings.json
 
+# Managed-tier CLAUDE.md. Same survival reasoning as managed-settings.json above: sbx rewrites
+# /home/agent/.claude on every (re)create, so a user-level CLAUDE.md or rules file is destroyed.
+# /etc/claude-code/CLAUDE.md is Claude Code's Linux managed-policy memory path — it loads ahead
+# of user and project CLAUDE.md and cannot be suppressed by user settings.
+COPY --chown=root:root claude-managed-CLAUDE.md /etc/claude-code/CLAUDE.md
+
 # JEV decision-support skills (https://www.jevai.org/agent). The vendor snippet installs to
 # .agents/skills/, which Claude Code does not read; the enterprise skills dir under the managed
 # settings directory is the equivalent tier and, like managed-settings.json above, is untouched
@@ -63,7 +69,8 @@ RUN set -eu; \
 USER agent
 
 COPY --chown=agent:agent statusline-command.sh /home/agent/.local/bin/statusline-command.sh
-RUN chmod +x /home/agent/.local/bin/statusline-command.sh
+COPY --chown=agent:agent run-filtered.sh /home/agent/.local/bin/run-filtered.sh
+RUN chmod +x /home/agent/.local/bin/statusline-command.sh /home/agent/.local/bin/run-filtered.sh
 
 # Install the latest .NET 10 SDK
 RUN curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
@@ -72,7 +79,11 @@ RUN curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
     && rm /tmp/dotnet-install.sh
 
 ENV DOTNET_ROOT=/home/agent/.dotnet
-ENV PATH="/home/agent/.dotnet:/home/agent/.dotnet/tools:${PATH}"
+ENV PATH="/home/agent/.dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:${PATH}"
+
+# Smoke-test run-filtered.sh: fails the build if it's missing, non-executable, or not resolvable
+# on PATH by bare name.
+RUN run-filtered.sh true
 
 # Install .NET global tools
 RUN dotnet tool install --global csharp-ls --version 0.24.0 \

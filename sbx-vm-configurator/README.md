@@ -175,6 +175,22 @@ $ claude mcp add --transport http jev --scope user https://www.jevai.org/mcp \
     --header 'Authorization: Bearer ${JEV_API_KEY}'
 ```
 
+### Filtered build output (Claude templates: dotnet `v8+`, dotnet-swift `v3+`)
+
+Both Claude images ship `run-filtered.sh` on PATH at `/home/agent/.local/bin/run-filtered.sh`: it
+runs a noisy command (`dotnet build`, `dotnet restore`, `npm install`, ...), captures full output to
+a log file, and prints only pass/fail, matched error/warning lines, and a detected version string —
+keeping build noise out of the agent's context.
+
+The instruction to prefer it for that class of command lives at `/etc/claude-code/CLAUDE.md`, not a
+user- or project-level `CLAUDE.md` — same reasoning as the statusline above: `sbx` rewrites
+`/home/agent/.claude` on every sandbox (re)create, so only the managed-policy tier survives. It
+loads ahead of user and project `CLAUDE.md` and can't be excluded by user settings.
+
+`sbx-vm-configurator/run-filtered.sh` and `sbx-vm-configurator/claude-managed-CLAUDE.md` are
+vendored copies (same pattern as `statusline-command.sh`) — there is no source-of-truth symlink
+into the image build, so if the host original changes, re-copy it by hand and rebuild.
+
 ---
 
 ## OpenCode (.NET 10 template: `opencode/dotnet/`)
@@ -279,14 +295,14 @@ image's `/etc/os-release` codename: it only runs if the base isn't already
 noble, since the Claude base wasn't verified to be resolute the way
 `opencode-docker` is.
 
-Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v2`):
+Build/load/run (or via its `build-sandbox.sh`, defaults to tag `v3`):
 
 ```console
 $ cd claude/dotnet-and-swift
-$ docker build -f Dockerfile -t claude-sbx-dotnet-and-swift:v2 ../..
-$ docker image save claude-sbx-dotnet-and-swift:v2 -o claude-sbx-dotnet-and-swift-v2.tar
-$ sbx template load claude-sbx-dotnet-and-swift-v2.tar
-$ sbx run --template claude-sbx-dotnet-and-swift:v2 claude ~/my-project
+$ docker build -f Dockerfile -t claude-sbx-dotnet-and-swift:v3 ../..
+$ docker image save claude-sbx-dotnet-and-swift:v3 -o claude-sbx-dotnet-and-swift-v3.tar
+$ sbx template load claude-sbx-dotnet-and-swift-v3.tar
+$ sbx run --template claude-sbx-dotnet-and-swift:v3 claude ~/my-project
 ```
 
 Verify inside the sandbox:

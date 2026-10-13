@@ -18,6 +18,9 @@ public final class SandboxesModel {
     private let lister: SandboxListing
     private let controller: SandboxControlling
     private let policies: PolicyControlling
+    /// Read side of `SbxCLI`'s invocation log — nil in tests that don't
+    /// care about the debug section (then `debugLog` stays empty).
+    private let debugger: (any SandboxDebugging)?
     private let launcher: TerminalLaunching
     private let toasts: ToastCenter
     private let mutateConfig: @Sendable (@escaping @Sendable (inout AppConfig) -> Void) async -> Void
@@ -37,6 +40,12 @@ public final class SandboxesModel {
     /// belong to the selection only when this equals `selectedName`.
     public private(set) var policiesFor: String?
     public private(set) var isPolicyLoading = false
+    /// Newest-last snapshot of the `sbx` invocations behind the tab's
+    /// current state — the live "sbx commands" debug section's content.
+    /// Refreshed after every `sbx`-driving call (reads and mutations alike),
+    /// including failed ones, so a parse failure still shows the response
+    /// that failed to parse.
+    public private(set) var debugLog: [SbxInvocation] = []
     /// A policy add/remove is in flight — gates only the policy controls
     /// (Add + remove buttons), never Run/Stop/Delete. The JS has no busy
     /// flag on the policy path at all; this one exists to prevent
@@ -80,6 +89,7 @@ public final class SandboxesModel {
         policies: PolicyControlling,
         launcher: TerminalLaunching,
         toasts: ToastCenter,
+        debugger: (any SandboxDebugging)? = nil,
         mutateConfig: @escaping @Sendable (@escaping @Sendable (inout AppConfig) -> Void) async -> Void = { _ in }
     ) {
         self.lister = lister
@@ -87,6 +97,7 @@ public final class SandboxesModel {
         self.policies = policies
         self.launcher = launcher
         self.toasts = toasts
+        self.debugger = debugger
         self.mutateConfig = mutateConfig
     }
 
@@ -129,6 +140,15 @@ public final class SandboxesModel {
             clearPolicyState()
         }
         sandboxesLoaded = true
+        await refreshDebugLog()
+    }
+
+    /// Snapshots `SbxCLI`'s invocation log into `debugLog` for the tab's
+    /// debug section. Deliberately outside the policy generation scheme —
+    /// the log is global, not per-selection, so even a stale fetch's
+    /// invocations are worth showing.
+    private func refreshDebugLog() async {
+        debugLog = await debugger?.recentInvocations() ?? []
     }
 
     /// Ports app.js:843-849's `selectSandbox` — a no-op reselect stays one
@@ -191,6 +211,7 @@ public final class SandboxesModel {
             policyLoadFailed = true
             toasts.show(message(for: failure), isError: true)
         }
+        await refreshDebugLog()
     }
 
     /// Ports app.js:1125-1164's `doPolicyAdd`, including its client-side
@@ -241,6 +262,7 @@ public final class SandboxesModel {
             guard selectedName == name, policyGeneration == generation else { return }
             policyError = message(for: failure)
         }
+        await refreshDebugLog()
     }
 
     /// Ports app.js:1166-1180's `doPolicyRemove`: the `SbxCLI` layer
@@ -263,6 +285,7 @@ public final class SandboxesModel {
         case .failure(let failure):
             toasts.show(message(for: failure), isError: true)
         }
+        await refreshDebugLog()
     }
 
     /// Ports app.js:797-801's `defaultArgsTextFor`: the stored string when
@@ -337,6 +360,7 @@ public final class SandboxesModel {
         switch await controller.runExisting(name: sandbox.name, agentArgs: tokens) {
         case .failure(let failure):
             toasts.show(message(for: failure), isError: true)
+            await refreshDebugLog()
             return
         case .success(let built):
             argv = built
@@ -361,6 +385,7 @@ public final class SandboxesModel {
         } else {
             toasts.show(result.error ?? "Could not open a terminal window.", isError: true)
         }
+        await refreshDebugLog()
     }
 
     /// Ports app.js:1040-1055's `doSandboxStop` — toast, then re-fetch so
@@ -376,6 +401,7 @@ public final class SandboxesModel {
             await fetch()
         case .failure(let failure):
             toasts.show(message(for: failure), isError: true)
+            await refreshDebugLog()
         }
     }
 
@@ -401,6 +427,7 @@ public final class SandboxesModel {
         switch await controller.remove(name: sandbox.name) {
         case .failure(let failure):
             toasts.show(message(for: failure), isError: true)
+            await refreshDebugLog()
         case .success:
             await mutateConfig { $0.sandboxArgs.removeValue(forKey: sandbox.name) }
             storedSandboxArgs.removeValue(forKey: sandbox.name)

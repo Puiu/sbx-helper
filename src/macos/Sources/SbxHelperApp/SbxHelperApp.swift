@@ -51,6 +51,7 @@ struct SbxHelperApp: App {
             policies: cli,
             launcher: terminalLauncher,
             toasts: toasts,
+            debugger: cli,
             mutateConfig: { [appModel] transform in
                 await appModel.update(transform)
             }

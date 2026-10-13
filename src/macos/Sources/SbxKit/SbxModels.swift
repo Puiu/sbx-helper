@@ -76,11 +76,18 @@ public struct Sandbox: Sendable, Equatable, Identifiable, Decodable {
 
 /// Parses `sbx ls --json` stdout into a flat sandbox list. Throws on
 /// malformed JSON; drops any array element that isn't a well-formed object
-/// rather than failing the whole list.
+/// rather than failing the whole list. Accepts both the
+/// `{"sandboxes": [...]}` envelope and a bare top-level `[...]` array —
+/// observed `sbx` output varies between the two, and the envelope-only
+/// decode surfaced bare-array output as a `typeMismatch` ("Expected
+/// Dictionary but found an array") failure in the Sandboxes tab.
 public func parseSandboxLs(_ stdout: String) throws -> [Sandbox] {
     struct Envelope: Decodable { let sandboxes: [Failable<Sandbox>]? }
-    let envelope = try JSONDecoder().decode(Envelope.self, from: Data(stdout.utf8))
-    return (envelope.sandboxes ?? []).compactMap(\.value)
+    let data = Data(stdout.utf8)
+    if let envelope = try? JSONDecoder().decode(Envelope.self, from: data) {
+        return (envelope.sandboxes ?? []).compactMap(\.value)
+    }
+    return try JSONDecoder().decode([Failable<Sandbox>].self, from: data).compactMap(\.value)
 }
 
 /// One raw `sbx policy ls <name> --json` rule, before the network-only
@@ -158,10 +165,18 @@ public struct PolicyRule: Sendable, Equatable, Identifiable {
 /// Sandbox-scoped rules sort first so the sandbox's own rules are what you
 /// see — a stable partition, not a sort, so `sbx`'s own within-group
 /// ordering survives (Swift's `sorted(by:)` is not a stable sort).
+/// Accepts both the `{"rules": [...]}` envelope and a bare top-level `[...]`
+/// array, mirroring `parseSandboxLs` — the two commands' `--json` shapes
+/// vary in lockstep.
 public func parseNetworkRules(stdout: String, sandboxName: String) throws -> [PolicyRule] {
     struct Envelope: Decodable { let rules: [Failable<RawPolicyRule>]? }
-    let envelope = try JSONDecoder().decode(Envelope.self, from: Data(stdout.utf8))
-    let raw = (envelope.rules ?? []).compactMap(\.value)
+    let data = Data(stdout.utf8)
+    let raw: [RawPolicyRule]
+    if let envelope = try? JSONDecoder().decode(Envelope.self, from: data) {
+        raw = (envelope.rules ?? []).compactMap(\.value)
+    } else {
+        raw = try JSONDecoder().decode([Failable<RawPolicyRule>].self, from: data).compactMap(\.value)
+    }
     let scopeTag = "sandbox:\(sandboxName)"
 
     let rules = raw
