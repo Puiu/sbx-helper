@@ -19,15 +19,28 @@ struct SandboxDebugLogView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Button("Reload sandboxes") { Task { await sandboxes.fetch() } }
 
-                if sandboxes.debugLog.isEmpty {
-                    Text("No sbx commands recorded yet — they appear here as the tab issues them.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.muted)
-                } else {
-                    ForEach(sandboxes.debugLog) { entry in
-                        entryView(entry)
+                // Scrolls inside the `VSplitView` allocation from
+                // `SandboxesView`, so a long log never grows the pane —
+                // the divider controls the height, overflow scrolls here.
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        if sandboxes.debugLog.isEmpty {
+                            Text("No sbx commands recorded yet — they appear here as the tab issues them.")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Theme.muted)
+                        } else {
+                            ForEach(sandboxes.debugLog) { entry in
+                                entryView(entry)
+                            }
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    // Inset so the first/last cards never sit flush at the
+                    // scroll edge, where the ScrollView's clipping would cut
+                    // the outer half of a centered stroke.
+                    .padding(.vertical, 2)
                 }
+                .frame(minHeight: 60, maxHeight: .infinity)
             }
             .padding(.top, 4)
         } label: {
@@ -64,7 +77,7 @@ struct SandboxDebugLogView: View {
         .background(Theme.paper)
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radius)
-                .stroke(Theme.hairline, lineWidth: 1)
+                .strokeBorder(Theme.hairline, lineWidth: 1)
         )
     }
 

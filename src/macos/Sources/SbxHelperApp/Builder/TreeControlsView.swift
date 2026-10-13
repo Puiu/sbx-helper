@@ -20,7 +20,7 @@ struct TreeControlsView: View {
                 .background(Theme.paper)
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.radius)
-                        .stroke(Theme.hairlineStrong, lineWidth: 1)
+                        .strokeBorder(Theme.hairlineStrong, lineWidth: 1)
                 )
                 .focused(filterFocused, equals: .filter)
 

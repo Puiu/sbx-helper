@@ -128,7 +128,7 @@ struct SandboxDetailView: View {
             .background(Theme.paper)
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.radius)
-                    .stroke(Theme.hairline, lineWidth: 1)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
             )
             .textSelection(.enabled)
     }

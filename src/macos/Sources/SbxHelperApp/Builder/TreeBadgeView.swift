@@ -19,7 +19,7 @@ struct TreeBadgeView: View {
             .padding(.vertical, 1)
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.badgeRadius)
-                    .stroke(tint == Theme.muted ? Theme.hairlineStrong : tint, lineWidth: 1)
+                    .strokeBorder(tint == Theme.muted ? Theme.hairlineStrong : tint, lineWidth: 1)
             )
     }
 }

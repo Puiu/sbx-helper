@@ -94,7 +94,7 @@ private struct PolicyRowView: View {
                     .foregroundStyle(rule.decision == "deny" ? Theme.danger : Theme.writeStrong)
                     .overlay(
                         RoundedRectangle(cornerRadius: Theme.badgeRadius)
-                            .stroke(rule.decision == "deny" ? Theme.danger : Theme.write, lineWidth: 1)
+                            .strokeBorder(rule.decision == "deny" ? Theme.danger : Theme.write, lineWidth: 1)
                     )
 
                 Text(rule.scopeLabel)
@@ -125,7 +125,7 @@ private struct PolicyRowView: View {
                         .background(Theme.paper)
                         .overlay(
                             RoundedRectangle(cornerRadius: Theme.badgeRadius)
-                                .stroke(Theme.hairlineStrong, lineWidth: 1)
+                                .strokeBorder(Theme.hairlineStrong, lineWidth: 1)
                         )
                         .textSelection(.enabled)
                 }
@@ -134,7 +134,7 @@ private struct PolicyRowView: View {
         .padding(8)
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radius)
-                .stroke(Theme.hairline, lineWidth: 1)
+                .strokeBorder(Theme.hairline, lineWidth: 1)
         )
         .opacity(rule.sandboxScoped ? 1 : 0.6)
     }

@@ -20,39 +20,48 @@ struct SandboxesView: View {
                         .padding(8)
                 }
 
-                if sandboxes.sandboxesLoaded, sandboxes.sandboxesError == nil, sandboxes.sandboxes.isEmpty {
-                    Text("No sandboxes found.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.muted)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                } else {
-                    // `List(selection:)` gives ↑/↓ navigation with
-                    // scroll-into-view plus row recycling for free — the
-                    // native analogue of app.js:1298-1304's
-                    // `onSandboxesKeydown` arrow handling, which therefore
-                    // needs no `.onKeyPress` port.
-                    List(
-                        sandboxes.sandboxes,
-                        selection: Binding(
-                            get: { sandboxes.selectedName },
-                            set: { if let name = $0 { sandboxes.select(name) } }
-                        )
-                    ) { sandbox in
-                        SandboxRowView(sandbox: sandbox)
-                            .tag(sandbox.name)
+                // The list and the debug log are vertical peers in a
+                // draggable splitter, so the log's height is
+                // user-adjustable per session and its overflow scrolls
+                // inside its allocation instead of squeezing the list.
+                VSplitView {
+                    Group {
+                        if sandboxes.sandboxesLoaded, sandboxes.sandboxesError == nil, sandboxes.sandboxes.isEmpty {
+                            Text("No sandboxes found.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.muted)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        } else {
+                            // `List(selection:)` gives ↑/↓ navigation with
+                            // scroll-into-view plus row recycling for free — the
+                            // native analogue of app.js:1298-1304's
+                            // `onSandboxesKeydown` arrow handling, which therefore
+                            // needs no `.onKeyPress` port.
+                            List(
+                                sandboxes.sandboxes,
+                                selection: Binding(
+                                    get: { sandboxes.selectedName },
+                                    set: { if let name = $0 { sandboxes.select(name) } }
+                                )
+                            ) { sandbox in
+                                SandboxRowView(sandbox: sandbox)
+                                    .tag(sandbox.name)
+                            }
+                            .listStyle(.plain)
+                        }
                     }
-                    .listStyle(.plain)
+                    .frame(minHeight: 80, maxHeight: .infinity)
+
+                    // Live sbx command/response log — collapsed by default.
+                    // Lives in the list pane (not the detail pane) so it stays
+                    // visible when the list itself fails to load, which is
+                    // exactly when its contents matter most.
+                    SandboxDebugLogView()
+                        .padding(8)
+                        .frame(minHeight: 28, idealHeight: 120, maxHeight: .infinity)
                 }
-
-                Divider()
-
-                // Live sbx command/response log — collapsed by default.
-                // Lives in the list pane (not the detail pane) so it stays
-                // visible when the list itself fails to load, which is
-                // exactly when its contents matter most.
-                SandboxDebugLogView()
-                    .padding(8)
+                .frame(maxHeight: .infinity)
             }
             .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
 
